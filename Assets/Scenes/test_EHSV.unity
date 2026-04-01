@@ -1342,9 +1342,10 @@ MonoBehaviour:
   shakeSmoothTime: 0.2
   enableJumpPitch: 1
   maxJumpPitchOffset: 15
-  pitchSmoothTime: 0.1
+  pitchSmoothTime: 0.2
   landReboundStrength: 0.5
   landReboundDuration: 0.2
+  airTransitionSmoothTime: 0.1
   controlsEnabled: 1
 --- !u!1 &1936530785
 GameObject:
