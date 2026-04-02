@@ -16,15 +16,15 @@ public class PlayerController : MonoBehaviour
 
     [Header("空中移动参数")]
     public float airAcceleration = 8f;
-    public float airDrag = 0.2f;           // 空中阻力，值越大减速越快
+    public float airDrag = 0.2f;
     public float airTurnSpeed = 5f;
-    public float maxAirSpeed = 8f;          // 空中最大水平速度限制
+    public float maxAirSpeed = 8f;
 
     [Header("跳跃参数")]
-    public float jumpForce = 8.0f;
-    public float jumpBufferTime = 0.2f;     // 跳跃预输入窗口
-    public float coyoteTime = 0.15f;        // 土狼跳时间
-    private float _gravity = 9.8f;
+    public float jumpForce = 8.0f;        // 跳跃初速度（可调节）
+    public float gravity = 9.8f;          // 重力加速度（可调节）
+    public float jumpBufferTime = 0.2f;   // 跳跃预输入窗口
+    public float coyoteTime = 0.15f;      // 土狼跳时间
 
     [Header("状态控制")]
     public bool canMove = true;
@@ -32,8 +32,8 @@ public class PlayerController : MonoBehaviour
 
     // 输入缓存
     private Vector2 _moveInput;
-    private bool _jumpPressed;              // 记录跳跃键是否被按下（用于缓冲）
-    private bool _jumpHeld;                 // 当前帧是否按住跳跃（备用）
+    private bool _jumpPressed;
+    private bool _jumpHeld;
 
     // 冲刺状态
     public bool IsSprinting { get; private set; }
@@ -93,9 +93,7 @@ public class PlayerController : MonoBehaviour
 
         if (grounded)
         {
-            // 接地时重置土狼计时器（已落地，不再需要）
             _coyoteTimer = 0f;
-            // 接地时重力速度处理
             if (_jumpVelocity.y < 0)
                 _jumpVelocity.y = -2f;
         }
@@ -104,25 +102,21 @@ public class PlayerController : MonoBehaviour
         bool canJump = _jumpBufferTimer > 0 && (grounded || _coyoteTimer > 0);
         if (canJump)
         {
-            // 执行跳跃
             _airHorizontalVelocity = CalculateDesiredHorizontalVelocity();
             IsAirborne = true;
-            _jumpVelocity.y = Mathf.Sqrt(jumpForce * 2f * _gravity);
-            // 清除缓冲和土狼计时器，防止重复跳跃
+            _jumpVelocity.y = Mathf.Sqrt(jumpForce * 2f * gravity); // 使用可调重力
             _jumpBufferTimer = 0f;
             _coyoteTimer = 0f;
         }
 
-        _jumpVelocity.y -= _gravity * Time.deltaTime;
+        _jumpVelocity.y -= gravity * Time.deltaTime; // 使用可调重力
 
         // 水平移动计算
         Vector3 horizontalMotion = Vector3.zero;
 
         if (IsAirborne)
         {
-            // 空中：根据输入平滑变化速度
             Vector3 desiredVel = CalculateDesiredHorizontalVelocity();
-            // 限制期望速度不超过最大空中速度
             if (desiredVel.magnitude > maxAirSpeed)
                 desiredVel = desiredVel.normalized * maxAirSpeed;
 
@@ -141,7 +135,6 @@ public class PlayerController : MonoBehaviour
                     _airHorizontalVelocity = Vector3.zero;
             }
 
-            // 再次对当前速度进行上限限制
             if (_airHorizontalVelocity.magnitude > maxAirSpeed)
                 _airHorizontalVelocity = _airHorizontalVelocity.normalized * maxAirSpeed;
 
@@ -155,11 +148,20 @@ public class PlayerController : MonoBehaviour
         Vector3 motion = horizontalMotion + _jumpVelocity;
         _controller.Move(motion * Time.deltaTime);
 
-        // 角色朝向（仅地面）
-        if (horizontalMotion.magnitude > 0.1f && !IsAirborne)
+        // 角色朝向：基于相机水平方向（视角方向）
+        if (canMove && !freezeGravity)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(horizontalMotion.normalized);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                Vector3 camForward = cam.transform.forward;
+                camForward.y = 0;
+                if (camForward != Vector3.zero)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(camForward);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+                }
+            }
         }
 
         // 落地检测
