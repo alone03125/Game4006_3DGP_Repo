@@ -21,14 +21,17 @@ public class PlayerController : MonoBehaviour
     public float maxAirSpeed = 8f;
 
     [Header("跳跃参数")]
-    public float jumpForce = 8.0f;        // 跳跃初速度（可调节）
-    public float gravity = 9.8f;          // 重力加速度（可调节）
-    public float jumpBufferTime = 0.2f;   // 跳跃预输入窗口
-    public float coyoteTime = 0.15f;      // 土狼跳时间
+    public float jumpForce = 2.2f;
+    public float gravity = 12f;
+    public float jumpBufferTime = 0.15f;
+    public float coyoteTime = 0.1f;
 
     [Header("状态控制")]
     public bool canMove = true;
     public bool freezeGravity = false;
+
+    [Header("分身专用设置")]
+    public bool faceMovementDirection = false;   // 面向移动方向（分身）或面向相机（本体）
 
     // 输入缓存
     private Vector2 _moveInput;
@@ -50,11 +53,16 @@ public class PlayerController : MonoBehaviour
     private float _jumpBufferTimer = 0f;
     private float _coyoteTimer = 0f;
 
+    // ========== 新增：位置变化事件（用于克隆体分离检测） ==========
+    public System.Action<Vector3, Vector3> OnPositionChanged;
+    private Vector3 _lastFramePosition;
+
     public CharacterController Controller => _controller;
 
     void Start()
     {
         _controller = GetComponent<CharacterController>();
+        _lastFramePosition = transform.position;
     }
 
     void OnMove(InputValue value) => _moveInput = value.Get<Vector2>();
@@ -85,11 +93,8 @@ public class PlayerController : MonoBehaviour
 
         bool grounded = _controller.isGrounded;
 
-        // 土狼跳计时器：仅在离开地面的瞬间启动
         if (!grounded && !IsAirborne)
-        {
             _coyoteTimer = coyoteTime;
-        }
 
         if (grounded)
         {
@@ -98,18 +103,17 @@ public class PlayerController : MonoBehaviour
                 _jumpVelocity.y = -2f;
         }
 
-        // 跳跃触发条件：有缓冲计时器 且 (在地面 或 土狼计时器有效)
         bool canJump = _jumpBufferTimer > 0 && (grounded || _coyoteTimer > 0);
         if (canJump)
         {
             _airHorizontalVelocity = CalculateDesiredHorizontalVelocity();
             IsAirborne = true;
-            _jumpVelocity.y = Mathf.Sqrt(jumpForce * 2f * gravity); // 使用可调重力
+            _jumpVelocity.y = Mathf.Sqrt(jumpForce * 2f * gravity);
             _jumpBufferTimer = 0f;
             _coyoteTimer = 0f;
         }
 
-        _jumpVelocity.y -= gravity * Time.deltaTime; // 使用可调重力
+        _jumpVelocity.y -= gravity * Time.deltaTime;
 
         // 水平移动计算
         Vector3 horizontalMotion = Vector3.zero;
@@ -148,18 +152,44 @@ public class PlayerController : MonoBehaviour
         Vector3 motion = horizontalMotion + _jumpVelocity;
         _controller.Move(motion * Time.deltaTime);
 
-        // 角色朝向：基于相机水平方向（视角方向）
+        // 角色朝向
         if (canMove && !freezeGravity)
         {
-            Camera cam = Camera.main;
-            if (cam != null)
+            if (faceMovementDirection)
             {
-                Vector3 camForward = cam.transform.forward;
-                camForward.y = 0;
-                if (camForward != Vector3.zero)
+                // 分身模式：仅在移动时面向移动方向
+                if (_moveInput != Vector2.zero)
                 {
-                    Quaternion targetRotation = Quaternion.LookRotation(camForward);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+                    Camera cam = Camera.main;
+                    if (cam != null)
+                    {
+                        Vector3 camForward = cam.transform.forward;
+                        Vector3 camRight = cam.transform.right;
+                        camForward.y = 0; camForward.Normalize();
+                        camRight.y = 0; camRight.Normalize();
+
+                        Vector3 moveDir = camForward * _moveInput.y + camRight * _moveInput.x;
+                        if (moveDir != Vector3.zero)
+                        {
+                            Quaternion targetRot = Quaternion.LookRotation(moveDir);
+                            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSpeed * Time.deltaTime);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // 本体模式：始终面向相机前方（即使静止）
+                Camera cam = Camera.main;
+                if (cam != null)
+                {
+                    Vector3 camForward = cam.transform.forward;
+                    camForward.y = 0;
+                    if (camForward != Vector3.zero)
+                    {
+                        Quaternion targetRotation = Quaternion.LookRotation(camForward);
+                        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+                    }
                 }
             }
         }
@@ -169,6 +199,14 @@ public class PlayerController : MonoBehaviour
         {
             IsAirborne = false;
         }
+
+        // ========== 位置变化事件触发 ==========
+        Vector3 newPos = transform.position;
+        if (OnPositionChanged != null && newPos != _lastFramePosition)
+        {
+            OnPositionChanged(_lastFramePosition, newPos);
+        }
+        _lastFramePosition = newPos;
     }
 
     private Vector3 CalculateDesiredHorizontalVelocity()
