@@ -15,14 +15,15 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("Detection")]
-    public float separationDistance = 0.1f;      // 仅用于碰撞恢复，不再用于检测条件
+    public float separationDistance = 0.1f;      // 碰撞恢复阈值
+    public float proximityRadius = 2.5f;          // 安全半径：分身在此距离内永不销毁
     public LayerMask occlusionMask = -1;
 
     // 状态
     private bool isTimeStopped = false;
     private bool cameraLocked = false;
     private bool isCloneActive = false;
-    private bool hasSeparated = false;            // 仍用于碰撞恢复
+    private bool hasSeparated = false;
 
     private GameObject currentClone;
     private GameObject currentSolidClone;
@@ -75,9 +76,12 @@ public class CloneManager : MonoBehaviour
         // 视野/遮挡检测：仅在保护期过后执行
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
-            if (!IsCloneInSight() || IsCloneOccluded())
+            float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
+            bool isInProximity = distToPlayer <= proximityRadius;
+
+            if (!isInProximity && (!IsCloneInSight() || IsCloneOccluded()))
             {
-                Debug.Log("分身丢失视野或被遮挡，强制退出时停");
+                Debug.Log($"分身距离本体 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被遮挡，强制退出时停");
                 ExitTimeStop(false);
             }
         }
@@ -85,7 +89,7 @@ public class CloneManager : MonoBehaviour
         {
             spawnProtectionTimer -= Time.deltaTime;
             if (spawnProtectionTimer <= 0f)
-                Debug.Log("分身保护期结束，开始检测视野/遮挡");
+                Debug.Log("分身保护期结束，开始检测视野/遮挡（安全半径内除外）");
         }
     }
 
@@ -154,7 +158,6 @@ public class CloneManager : MonoBehaviour
         DisablePlayerInput(player, true);
         EnablePlayerInput(currentClone, true);
 
-        // 启动保护期
         spawnProtectionTimer = SPAWN_PROTECTION_DURATION;
         Debug.Log("分身已生成，保护期内不检测视野");
     }
@@ -167,7 +170,6 @@ public class CloneManager : MonoBehaviour
         cameraLocked = false;
         cameraOrbit.SetCameraLock(false, Quaternion.identity);
 
-        // 先恢复本体控制（但位置可能被传送，需小心）
         playerController.canMove = true;
         playerController.freezeGravity = false;
 
@@ -185,26 +187,20 @@ public class CloneManager : MonoBehaviour
                 }
                 else // 选择分身为新载体：传送本体到分身位置
                 {
-                    // 临时禁用本体的 CharacterController 和移动，防止被物理干扰
                     playerCharController.enabled = false;
                     Vector3 originalPos = player.transform.position;
                     Quaternion originalRot = player.transform.rotation;
 
-                    // 传送本体
                     player.transform.position = currentClone.transform.position;
                     player.transform.rotation = currentClone.transform.rotation;
 
-                    // 强制同步 CharacterController（重新启用前）
                     playerCharController.enabled = true;
-                    // 将 CharacterController 的 center 重置（可选）
                     playerCharController.Move(Vector3.zero);
 
-                    // 继承相机视角
                     float newYaw = currentClone.transform.eulerAngles.y;
                     float currentPitch = cameraOrbit.GetPitch();
                     cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
-                    // 在本体原位置生成不动实体
                     CreateSolidClone(originalPos, originalRot);
 
                     Destroy(currentClone);
@@ -271,7 +267,6 @@ public class CloneManager : MonoBehaviour
         const float maxSightDistance = 25f;
         if (distance > maxSightDistance) return false;
 
-        // 水平半角 80°，垂直半角 60°（更宽松）
         float horizontalHalfAngle = 80f;
         float verticalHalfAngle = 60f;
 
@@ -287,7 +282,6 @@ public class CloneManager : MonoBehaviour
         if (angleHor <= horizontalHalfAngle && angleVer <= verticalHalfAngle)
             return true;
 
-        // 后备：视口扩展检测（允许边缘外 20%）
         Vector3 viewportPos = cam.WorldToViewportPoint(currentClone.transform.position);
         if (viewportPos.z > 0 && viewportPos.x >= -0.2f && viewportPos.x <= 1.2f && viewportPos.y >= -0.2f && viewportPos.y <= 1.2f)
             return true;
@@ -303,9 +297,7 @@ public class CloneManager : MonoBehaviour
         float distance = dir.magnitude;
         if (distance < 0.2f) return false;
 
-        // 使用临时忽略本体的射线检测
-        int layerMask = occlusionMask;
-        if (Physics.Raycast(origin, dir, out RaycastHit hit, distance, layerMask))
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, distance, occlusionMask))
         {
             Transform hitRoot = hit.transform.root;
             if (hitRoot != player.transform && hitRoot != currentClone.transform)

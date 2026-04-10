@@ -31,7 +31,7 @@ public class PlayerController : MonoBehaviour
     public bool freezeGravity = false;
 
     [Header("分身专用设置")]
-    public bool faceMovementDirection = false;   // 面向移动方向（分身）或面向相机（本体）
+    public bool faceMovementDirection = false;   // true=分身模式（恒速），false=本体模式（各向差速）
 
     // 输入缓存
     private Vector2 _moveInput;
@@ -53,7 +53,7 @@ public class PlayerController : MonoBehaviour
     private float _jumpBufferTimer = 0f;
     private float _coyoteTimer = 0f;
 
-    // ========== 新增：位置变化事件（用于克隆体分离检测） ==========
+    // 位置变化事件（用于克隆体分离检测）
     public System.Action<Vector3, Vector3> OnPositionChanged;
     private Vector3 _lastFramePosition;
 
@@ -200,7 +200,7 @@ public class PlayerController : MonoBehaviour
             IsAirborne = false;
         }
 
-        // ========== 位置变化事件触发 ==========
+        // 触发位置变化事件
         Vector3 newPos = transform.position;
         if (OnPositionChanged != null && newPos != _lastFramePosition)
         {
@@ -224,14 +224,25 @@ public class PlayerController : MonoBehaviour
         Vector3 desiredDir = camForward * _moveInput.y + camRight * _moveInput.x;
         desiredDir.Normalize();
 
-        float dot = Vector3.Dot(desiredDir, camForward);
-        float directionFactor;
-        if (dot > 0.7f) directionFactor = forwardFactor;
-        else if (dot < -0.7f) directionFactor = backFactor;
-        else directionFactor = strafeFactor;
+        float finalSpeed;
+        if (faceMovementDirection)
+        {
+            // 分身模式：始终全速移动，忽略方向因子（前/侧/后速度一致）
+            finalSpeed = moveSpeed;
+            if (IsSprinting && !IsAirborne) finalSpeed *= sprintMultiplier;
+        }
+        else
+        {
+            // 本体模式：使用各向差速
+            float dot = Vector3.Dot(desiredDir, camForward);
+            float directionFactor;
+            if (dot > 0.7f) directionFactor = forwardFactor;
+            else if (dot < -0.7f) directionFactor = backFactor;
+            else directionFactor = strafeFactor;
 
-        float finalSpeed = moveSpeed * directionFactor;
-        if (IsSprinting && !IsAirborne) finalSpeed *= sprintMultiplier;
+            finalSpeed = moveSpeed * directionFactor;
+            if (IsSprinting && !IsAirborne) finalSpeed *= sprintMultiplier;
+        }
 
         return desiredDir * finalSpeed;
     }
