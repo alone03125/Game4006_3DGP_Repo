@@ -46,6 +46,8 @@ public class SimpleCameraOrbit : MonoBehaviour
     private float currentShakeIntensity = 0f;
     private bool wasGrounded = true;
 
+    private Vector3 defaultHeadOffset;
+
     void Start()
     {
         if (target == null)
@@ -53,6 +55,23 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         playerController = target?.GetComponent<PlayerController>();
         ApplyControlsState();
+
+        defaultHeadOffset = headOffset;
+    }
+    public void SetControlsEnabled(bool enabled)
+    {
+        controlsEnabled = enabled;
+        ApplyControlsState();
+    }
+
+    public void SetCameraOffset(Vector3 newOffset)
+    {
+        headOffset = newOffset;
+    }
+
+    public void ResetCameraOffset()
+    {
+        headOffset = defaultHeadOffset;
     }
 
     void Update()

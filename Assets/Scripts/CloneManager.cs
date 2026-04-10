@@ -392,4 +392,16 @@ public class CloneManager : MonoBehaviour
         if (currentClone != null) Destroy(currentClone);
         if (currentSolidClone != null) Destroy(currentSolidClone);
     }
+
+    public void ForceExitTimeStop(bool shouldGenerateSolid)
+    {
+        if (isTimeStopped)
+            ExitTimeStop(shouldGenerateSolid);
+    }
+
+    public void ActivateVisionCloneFromTrace()
+    {
+        // 直接调用激活逻辑，但需要确保当前没有分身
+        ActivateVisionClone();
+    }
 }
