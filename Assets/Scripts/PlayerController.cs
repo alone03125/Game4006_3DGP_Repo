@@ -6,7 +6,7 @@ public class PlayerController : MonoBehaviour
 {
     private CharacterController _controller;
 
-    [Header("ÒÆ¶¯²ÎÊý")]
+    [Header("ï¿½Æ¶ï¿½ï¿½ï¿½ï¿½ï¿½")]
     public float moveSpeed = 5.0f;
     public float sprintMultiplier = 1.5f;
     public float forwardFactor = 1.0f;
@@ -14,39 +14,44 @@ public class PlayerController : MonoBehaviour
     public float backFactor = 0.5f;
     public float rotateSpeed = 10.0f;
 
-    [Header("¿ÕÖÐÒÆ¶¯²ÎÊý")]
+    [Header("ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ï¿½ï¿½ï¿½ï¿½")]
     public float airAcceleration = 8f;
     public float airDrag = 3f;
     public float airTurnSpeed = 5f;
     public float maxAirSpeed = 8f;
 
-    [Header("ÌøÔ¾²ÎÊý")]
+    [Header("ï¿½ï¿½Ô¾ï¿½ï¿½ï¿½ï¿½")]
     public float jumpForce = 2.2f;
     public float gravity = 12f;
     public float jumpBufferTime = 0.15f;
     public float coyoteTime = 0.1f;
 
-    [Header("×´Ì¬¿ØÖÆ")]
+    [Header("×´Ì¬ï¿½ï¿½ï¿½ï¿½")]
     public bool canMove = true;
     public bool freezeGravity = false;
 
-    [Header("·ÖÉí×¨ÓÃÉèÖÃ")]
+    [Header("ï¿½ï¿½ï¿½ï¿½×¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½")]
     public bool faceMovementDirection = false;
 
-    // ÊäÈë»º´æ
+    // ï¿½ï¿½ï¿½ë»ºï¿½ï¿½
     private Vector2 _moveInput;
     private bool _jumpPressed;
     private bool _jumpHeld;
 
-    // ³å´Ì×´Ì¬
+    // ï¿½ï¿½ï¿½×´Ì¬
     private bool _isSprinting;
     public bool IsSprinting => useExternalInput ? externalSprint : _isSprinting;
 
-    // Íâ²¿ÊäÈë¸²¸Ç
+    // ï¿½â²¿ï¿½ï¿½ï¿½ë¸²ï¿½ï¿½
     [HideInInspector] public bool useExternalInput = false;
     private Vector2 externalMoveInput;
     private bool externalJump;
     private bool externalSprint;
+    private bool prevExternalJump;
+
+    // æ‘„åƒæœºæ–¹å‘è¦†ç›–ï¼ˆç”¨äºŽå¾ªè¿¹åˆ†èº«å›žæ”¾ï¼‰
+    [HideInInspector] public bool useCameraOverride = false;
+    [HideInInspector] public float overrideCameraYaw = 0f;
 
     public float CurrentMaxSpeed => moveSpeed * (IsSprinting ? sprintMultiplier : 1f);
     public bool IsAirborne { get; private set; }
@@ -61,16 +66,16 @@ public class PlayerController : MonoBehaviour
 
     public CharacterController Controller => _controller;
 
-    // »ñÈ¡µ±Ç°ÓÐÐ§ÊäÈë£¨¹©Íâ²¿¼ÇÂ¼£©
+    // ï¿½ï¿½È¡ï¿½ï¿½Ç°ï¿½ï¿½Ð§ï¿½ï¿½ï¿½ë£¨ï¿½ï¿½ï¿½â²¿ï¿½ï¿½Â¼ï¿½ï¿½
     public Vector2 GetEffectiveMoveInput() => useExternalInput ? externalMoveInput : _moveInput;
     public bool GetEffectiveJump() => useExternalInput ? externalJump : _jumpPressed;
     public bool GetEffectiveSprint() => useExternalInput ? externalSprint : _isSprinting;
 
-    // »ñÈ¡Ô­Ê¼ÊäÈë
+    // ï¿½ï¿½È¡Ô­Ê¼ï¿½ï¿½ï¿½ï¿½
     public Vector2 GetRawMoveInput() => _moveInput;
     public bool GetRawJumpPressed() => _jumpPressed;
 
-    // ÉèÖÃÍâ²¿ÊäÈë
+    // ï¿½ï¿½ï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½
     public void SetExternalInput(Vector2 move, bool jump, bool sprint)
     {
         externalMoveInput = move;
@@ -104,7 +109,17 @@ public class PlayerController : MonoBehaviour
     {
         if (freezeGravity) return;
 
-        // ¸üÐÂ¼ÆÊ±Æ÷
+        // å¤–éƒ¨è¾“å…¥è·³è·ƒï¼šæ£€æµ‹ä¸Šå‡æ²¿ä»¥è§¦å‘è·³è·ƒç¼“å†²
+        if (useExternalInput)
+        {
+            if (externalJump && !prevExternalJump)
+            {
+                _jumpBufferTimer = jumpBufferTime;
+            }
+            prevExternalJump = externalJump;
+        }
+
+        // ï¿½ï¿½ï¿½Â¼ï¿½Ê±ï¿½ï¿½
         if (_jumpBufferTimer > 0)
             _jumpBufferTimer -= Time.deltaTime;
         if (_coyoteTimer > 0)
@@ -170,7 +185,7 @@ public class PlayerController : MonoBehaviour
         Vector3 motion = horizontalMotion + _jumpVelocity;
         _controller.Move(motion * Time.deltaTime);
 
-        // ½ÇÉ«³¯Ïò
+        // ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½
         if (canMove && !freezeGravity)
         {
             if (faceMovementDirection)
@@ -197,16 +212,22 @@ public class PlayerController : MonoBehaviour
             }
             else
             {
-                Camera cam = Camera.main;
-                if (cam != null)
+                Vector3 camForward;
+                if (useCameraOverride)
                 {
-                    Vector3 camForward = cam.transform.forward;
-                    camForward.y = 0;
-                    if (camForward != Vector3.zero)
-                    {
-                        Quaternion targetRotation = Quaternion.LookRotation(camForward);
-                        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
-                    }
+                    Quaternion rot = Quaternion.Euler(0, overrideCameraYaw, 0);
+                    camForward = rot * Vector3.forward;
+                }
+                else
+                {
+                    Camera cam = Camera.main;
+                    camForward = (cam != null) ? cam.transform.forward : Vector3.zero;
+                }
+                camForward.y = 0;
+                if (camForward != Vector3.zero)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(camForward);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
                 }
             }
         }
@@ -229,11 +250,20 @@ public class PlayerController : MonoBehaviour
         Vector2 move = GetEffectiveMoveInput();
         if (!canMove || move == Vector2.zero) return Vector3.zero;
 
-        Camera cam = Camera.main;
-        if (cam == null) return Vector3.zero;
-
-        Vector3 camForward = cam.transform.forward;
-        Vector3 camRight = cam.transform.right;
+        Vector3 camForward, camRight;
+        if (useCameraOverride)
+        {
+            Quaternion rot = Quaternion.Euler(0, overrideCameraYaw, 0);
+            camForward = rot * Vector3.forward;
+            camRight = rot * Vector3.right;
+        }
+        else
+        {
+            Camera cam = Camera.main;
+            if (cam == null) return Vector3.zero;
+            camForward = cam.transform.forward;
+            camRight = cam.transform.right;
+        }
         camForward.y = 0; camForward.Normalize();
         camRight.y = 0; camRight.Normalize();
 

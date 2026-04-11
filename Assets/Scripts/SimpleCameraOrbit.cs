@@ -25,13 +25,16 @@ public class SimpleCameraOrbit : MonoBehaviour
     // 控制状态
     public bool controlsEnabled = true;
 
-    // ========== 新增：相机锁定扩展 ==========
+    // 相机锁定扩展
     private bool isCameraLocked = false;
     private Quaternion lockedRotation;
-    private Vector3 lockedPosition;       // 锁定时相机跟随的位置（本体位置）
-    private bool followTargetWhenLocked = true; // 锁定时是否跟随目标移动
+    private bool followTargetWhenLocked = true;
 
-    // 原有私有变量
+    // 自由第三人称模式（用于循迹分身）
+    private bool freeLookMode = false;
+    private float freeLookDistance = 5f;
+
+    // 内部变量
     private float yaw = 0f;
     private float pitch = 0f;
     private float pitchOffsetRaw = 0f;
@@ -58,11 +61,6 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         defaultHeadOffset = headOffset;
     }
-    public void SetControlsEnabled(bool enabled)
-    {
-        controlsEnabled = enabled;
-        ApplyControlsState();
-    }
 
     public void SetCameraOffset(Vector3 newOffset)
     {
@@ -87,7 +85,26 @@ public class SimpleCameraOrbit : MonoBehaviour
     {
         if (target == null) return;
 
-        // 鼠标视角旋转（仅当相机未锁定时生效）
+        // ===== 自由第三人称模式（用于循迹分身） =====
+        if (freeLookMode)
+        {
+            // 鼠标控制旋转
+            if (controlsEnabled && Mouse.current != null)
+            {
+                Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
+                yaw += delta.x;
+                pitch -= delta.y;
+                pitch = Mathf.Clamp(pitch, -30f, 80f);
+            }
+
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0);
+            Vector3 offset = rotation * new Vector3(0, 0, -freeLookDistance);
+            transform.position = target.position + Vector3.up * 1.5f + offset;
+            transform.LookAt(target.position + Vector3.up * 1.5f);
+            return; // 跳过原有逻辑
+        }
+
+        // ===== 原有复杂逻辑（本体/视界分身） =====
         if (controlsEnabled && Mouse.current != null && !isCameraLocked)
         {
             Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
@@ -98,11 +115,11 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         bool isGrounded = playerController != null && playerController.Controller.isGrounded;
 
-        // 更新过渡权重（用于俯仰偏移混合）
+        // 更新过渡权重
         float targetWeight = isGrounded ? 0f : 1f;
         airTransitionWeight = Mathf.SmoothDamp(airTransitionWeight, targetWeight, ref airTransitionVelocity, airTransitionSmoothTime);
 
-        // 1. 抖动强度平滑
+        // 抖动强度
         if (enableShake && playerController != null)
         {
             float targetIntensity = 0f;
@@ -119,7 +136,7 @@ public class SimpleCameraOrbit : MonoBehaviour
             currentShakeIntensity = 0f;
         }
 
-        // 2. 计算抖动偏移
+        // 抖动偏移
         Vector3 shakeOffset = Vector3.zero;
         if (controlsEnabled && currentShakeIntensity > 0.01f)
         {
@@ -136,13 +153,11 @@ public class SimpleCameraOrbit : MonoBehaviour
             shakePhase = 0f;
         }
 
-        // 3. 原始俯仰偏移
+        // 俯仰偏移
         UpdatePitchOffsetRaw(isGrounded);
-
-        // 4. 最终俯仰偏移
         float finalPitchOffset = pitchOffsetRaw * airTransitionWeight;
 
-        // 5. 最终旋转和位置
+        // 最终旋转
         Quaternion targetRot;
         if (isCameraLocked)
             targetRot = lockedRotation;
@@ -151,13 +166,13 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         transform.rotation = targetRot;
 
-        // 位置：锁定时可能强制跟随目标（本体），否则正常跟随target+偏移
+        // 位置
         if (isCameraLocked && followTargetWhenLocked && target != null)
             transform.position = target.position + headOffset + shakeOffset;
         else if (!isCameraLocked)
             transform.position = target.position + headOffset + shakeOffset;
 
-        // 6. 落地回弹逻辑
+        // 落地回弹逻辑
         if (!wasGrounded && isGrounded)
         {
             float verticalSpeed = playerController?.GetCurrentVerticalSpeed() ?? 0f;
@@ -225,13 +240,7 @@ public class SimpleCameraOrbit : MonoBehaviour
         ApplyControlsState();
     }
 
-    // ========== 新增公共方法（供 CloneManager 调用） ==========
-    /// <summary>
-    /// 锁定相机旋转和位置跟随模式
-    /// </summary>
-    /// <param name="locked">是否锁定</param>
-    /// <param name="fixedRotation">锁定的旋转</param>
-    /// <param name="followTarget">锁定时是否继续跟随目标位置（时停期间应跟随本体）</param>
+    // ========== 公共方法 ==========
     public void SetCameraLock(bool locked, Quaternion fixedRotation, bool followTarget = true)
     {
         isCameraLocked = locked;
@@ -242,22 +251,34 @@ public class SimpleCameraOrbit : MonoBehaviour
         }
     }
 
+    public void SetControlsEnabled(bool enabled)
+    {
+        controlsEnabled = enabled;
+        ApplyControlsState();
+    }
+
     /// <summary>
-    /// 强制设置相机的偏航角和俯仰角（用于继承分身朝向）
+    /// 启用/禁用自由第三人称模式（用于循迹分身）
     /// </summary>
+    public void SetFreeLookMode(bool enabled, float distance = 5f)
+    {
+        freeLookMode = enabled;
+        freeLookDistance = distance;
+        if (enabled)
+        {
+            // 确保控制启用且解锁
+            controlsEnabled = true;
+            isCameraLocked = false;
+            ApplyControlsState();
+        }
+    }
+
     public void SetYawPitch(float newYaw, float newPitch)
     {
         yaw = newYaw;
         pitch = Mathf.Clamp(newPitch, -80f, 80f);
     }
 
-    /// <summary>
-    /// 获取当前俯仰角
-    /// </summary>
     public float GetPitch() => pitch;
-
-    /// <summary>
-    /// 获取当前偏航角
-    /// </summary>
     public float GetYaw() => yaw;
 }
