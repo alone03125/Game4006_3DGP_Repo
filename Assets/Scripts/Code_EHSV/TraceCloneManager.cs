@@ -289,6 +289,38 @@ public class TraceCloneManager : MonoBehaviour
         DisablePlayerInput(player, false);
     }
 
+    /// <summary>
+    /// Cleanly exits trace phantom state without spawning a clone or saving any recorded data.
+    /// Called by PauseManager when ESC is pressed during trace phantom state.
+    /// </summary>
+    public void ForceExitClean()
+    {
+        if (!isPhantomActive) return;
+
+        Debug.Log("[TraceClone] Clean exit (ESC) - discarding recorded ticks");
+
+        cameraOrbit.target = originalCameraTarget;
+        cameraOrbit.SetFreeLookMode(false);
+        cameraOrbit.headOffset = originalHeadOffset;
+        cameraOrbit.SetControlsEnabled(originalCameraControlsEnabled);
+
+        playerController.canMove = true;
+        playerController.freezeGravity = false;
+
+        Destroy(currentPhantom);
+        currentPhantom = null;
+        phantomController = null;
+
+        isPhantomActive = false;
+        isTimeStopped = false;
+        isRecording = false;
+        recordedTicks.Clear();
+        savedTicks.Clear();
+        hasSavedSequence = false;
+
+        DisablePlayerInput(player, false);
+    }
+
     private void ReplaceMaterials(GameObject obj, Material mat)
     {
         var renderers = obj.GetComponentsInChildren<Renderer>();
