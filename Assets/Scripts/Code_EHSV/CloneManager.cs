@@ -41,6 +41,7 @@ public class CloneManager : MonoBehaviour
     private Quaternion lockedCameraRotation;
     private InputAction qAction;
     private InputAction tabAction;
+    private TraceCloneManager traceCloneManager;
 
     // �����ڣ���ֹ����˲�䱻�����٣�
     private float spawnProtectionTimer = 0f;
@@ -53,6 +54,7 @@ public class CloneManager : MonoBehaviour
         playerController = player.GetComponent<PlayerController>();
         playerCharController = player.GetComponent<CharacterController>();
         cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
+        traceCloneManager = GetComponent<TraceCloneManager>();
 
         var inputActions = new InputActionMap();
         qAction = inputActions.AddAction("Q", binding: "<Keyboard>/q");
@@ -95,6 +97,13 @@ public class CloneManager : MonoBehaviour
 
     private void OnQPerformed(InputAction.CallbackContext ctx)
     {
+        // If trace clone manager is in time-stop (phantom active), let it handle Q
+        if (traceCloneManager != null && traceCloneManager.IsTimeStopped())
+        {
+            traceCloneManager.HandleQDuringPhantom();
+            return;
+        }
+
         if (!isTimeStopped)
             ActivateVisionClone();
         else
@@ -228,6 +237,12 @@ public class CloneManager : MonoBehaviour
         hasSeparated = false;
         selectedCarrier = null;
         spawnProtectionTimer = 0f;
+
+        // If there is a saved trace sequence, spawn trace clone now
+        if (traceCloneManager != null && traceCloneManager.HasSavedSequence())
+        {
+            traceCloneManager.SpawnTraceCloneFromSaved();
+        }
     }
 
     private void ToggleCarrierSelection()

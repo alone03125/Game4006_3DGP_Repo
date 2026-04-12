@@ -6,6 +6,10 @@ TagManager:
   tags:
   - Clone
   - Door
+  - VisionClone
+  - SolidClone
+  - TracePhantom
+  - TraceClone
   layers:
   - Default
   - TransparentFX
