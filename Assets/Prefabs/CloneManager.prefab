@@ -12,7 +12,6 @@ GameObject:
   - component: {fileID: 4289365770377893169}
   - component: {fileID: 9014755463341818459}
   - component: {fileID: 7318817174579022191}
-  - component: {fileID: 6534104125368155872}
   m_Layer: 0
   m_Name: CloneManager
   m_TagString: Untagged
@@ -75,10 +74,6 @@ MonoBehaviour:
   phantomMaterial: {fileID: 2100000, guid: 7be7f1e6ca45e6a45a515e8c9eee284e, type: 2}
   traceCloneMaterial: {fileID: 2100000, guid: 2ee868505006fb047a8fba6cd1ea7d14, type: 2}
   snapshotInterval: 0.1
-  correctionTolerance: 1
-  correctionBreakThreshold: 1.5
-  jumpLookaheadWindow: 0.15
-  jumpLookbackWindow: 0.12
 --- !u!114 &7318817174579022191
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -110,15 +105,3 @@ MonoBehaviour:
   m_DefaultActionMap: Gameplay
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
---- !u!114 &6534104125368155872
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2420388095679804379}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b6a5815912a30284084ebbbe136272fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 

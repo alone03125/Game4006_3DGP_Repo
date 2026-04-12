@@ -10,25 +10,19 @@ public class TraceCloneManager : MonoBehaviour
     public Material traceCloneMaterial;
 
     [Header("录制设置")]
-    [Tooltip("状态快照间隔（秒），用于空间修正校验点")]
+    [Tooltip("状态快照间隔（秒）")]
     public float snapshotInterval = 0.1f;
 
-    [Header("回放空间修正")]
-    public float correctionTolerance = 0.3f;
-    public float correctionBreakThreshold = 1.5f;
-    public float jumpLookaheadWindow = 0.15f;
-    public float jumpLookbackWindow = 0.12f;
-
-    // === 事件驱动的录制数据结构 ===
+    // === 数据结构 ===
     [System.Serializable]
     public struct InputEvent
     {
-        public float time;           // 相对录制开始的 fixedTime
+        public float time;
         public InputEventType type;
         public Vector2 moveValue;
         public float cameraYaw;
         public bool sprintState;
-        public bool jumpState;       // 新增：明确记录跳跃按下/释放状态
+        public bool jumpState;
     }
 
     public enum InputEventType
@@ -66,16 +60,15 @@ public class TraceCloneManager : MonoBehaviour
     // 录制数据
     private List<InputEvent> recordedEvents = new List<InputEvent>();
     private List<StateSnapshot> recordedSnapshots = new List<StateSnapshot>();
-    private float recordStartFixedTime;      // 改用 fixedTime
+    private float recordStartFixedTime;
     private float lastSnapshotFixedTime;
     private bool isRecording = false;
 
-    // 上一帧输入状态
     private Vector2 prevMoveInput;
     private bool prevJumpState;
     private bool prevSprintState;
 
-    // 已保存序列
+    // 保存的序列
     private List<InputEvent> savedEvents = new List<InputEvent>();
     private List<StateSnapshot> savedSnapshots = new List<StateSnapshot>();
     private bool hasSavedSequence = false;
@@ -100,7 +93,6 @@ public class TraceCloneManager : MonoBehaviour
             ExitTracePhantomAndSpawnClone();
     }
 
-    // 核心改动：录制逻辑移至 FixedUpdate
     private void FixedUpdate()
     {
         if (!isTimeStopped || !isPhantomActive || !isRecording) return;
@@ -199,7 +191,7 @@ public class TraceCloneManager : MonoBehaviour
         if (cloneManager != null && cloneManager.IsTimeStopped())
             cloneManager.ForceExitTimeStop(false);
 
-        Debug.Log(">>> [TraceClone] Enter trace phantom state (deterministic record)");
+        Debug.Log(">>> [TraceClone] Enter trace phantom state");
 
         originalCameraTarget = cameraOrbit.target;
         originalHeadOffset = cameraOrbit.headOffset;
@@ -233,7 +225,6 @@ public class TraceCloneManager : MonoBehaviour
 
         cameraOrbit.target = currentPhantom.transform;
 
-        // 初始化录制
         recordedEvents.Clear();
         recordedSnapshots.Clear();
         recordStartFixedTime = Time.fixedTime;
@@ -244,7 +235,6 @@ public class TraceCloneManager : MonoBehaviour
         prevJumpState = false;
         prevSprintState = false;
 
-        // 初始快照
         recordedSnapshots.Add(new StateSnapshot
         {
             time = 0f,
@@ -314,7 +304,7 @@ public class TraceCloneManager : MonoBehaviour
         DisablePlayerInput(player, false);
     }
 
-    private void SwitchToVisionClone()
+    public void SwitchToVisionClone()
     {
         if (!isTimeStopped || !isPhantomActive) return;
 
@@ -358,7 +348,7 @@ public class TraceCloneManager : MonoBehaviour
         Quaternion spawnRot = player.transform.rotation;
         currentTraceClone = Instantiate(playerPrefab, spawnPos, spawnRot);
         currentTraceClone.tag = "TraceClone";
-        currentTraceClone.name = "TraceClone";
+        currentTraceClone.name = "TraceClone_Follow";
         ReplaceMaterials(currentTraceClone, traceCloneMaterial);
 
         IgnoreCollisionBetween(player, currentTraceClone, true);
@@ -371,19 +361,12 @@ public class TraceCloneManager : MonoBehaviour
 
         var traceController = currentTraceClone.GetComponent<PlayerController>();
         traceController.enabled = true;
-        traceController.canMove = true;
-        traceController.useExternalInput = true;
-        traceController.useCameraOverride = true;
-        traceController.faceMovementDirection = false;
-        traceController.freezeGravity = false;
-        traceController.useFixedUpdateMode = true;
 
-        var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
-        replay.Initialize(events, snapshots, traceController,
-            correctionTolerance, correctionBreakThreshold,
-            jumpLookaheadWindow, jumpLookbackWindow);
+        // 添加路径跟随组件（替代原来的 TraceCloneReplay）
+        var follow = currentTraceClone.AddComponent<TraceCloneFollowPath>();
+        follow.Initialize(events, snapshots, traceController);
 
-        Debug.Log($"[TraceClone] Trace clone spawned (deterministic mode)");
+        Debug.Log("[TraceClone] Spawned path-following trace clone.");
     }
 
     public void SpawnTraceCloneFromSaved()
@@ -409,7 +392,6 @@ public class TraceCloneManager : MonoBehaviour
             SwitchToVisionClone();
     }
 
-    // ---------- 辅助方法 ----------
     private void ReplaceMaterials(GameObject obj, Material mat)
     {
         foreach (var rend in obj.GetComponentsInChildren<Renderer>())
