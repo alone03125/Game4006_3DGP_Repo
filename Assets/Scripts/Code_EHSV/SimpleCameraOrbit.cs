@@ -6,9 +6,11 @@ public class SimpleCameraOrbit : MonoBehaviour
     public Transform target;
     public Vector3 headOffset = new Vector3(0, 1.2f, 0);
     public float lookSensitivity = 8f;
+    public bool invertY = false;
 
     // ��������
     public bool enableShake = true;
+    public float shakeIntensityMultiplier = 1f;
     public float horizontalShakeAmplitude = 0.25f;
     public float verticalShakeAmplitude = 0.15f;
     public float maxShakeFrequency = 5f;
@@ -41,12 +43,15 @@ public class SimpleCameraOrbit : MonoBehaviour
         new Keyframe(0f, 0f, 0f, 3f),
         new Keyframe(1f, 1f, 0f, 0f)
     );
+    [Tooltip("How quickly camera shake blends during view transitions (0=instant, 1=slow)")]
+    public float shakeTransitionBlendSpeed = 4f;
     private bool isTransitioning = false;
     private float transitionTimer = 0f;
     private float transitionDuration = 0.4f;
     private Vector3 transitionStartPos;
     private Quaternion transitionStartRot;
     private bool transitionToFreeLook = false;
+    private float transitionShakeWeight = 1f; // blends shake during transitions
 
     // �ڲ�����
     private float yaw = 0f;
@@ -88,11 +93,7 @@ public class SimpleCameraOrbit : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            controlsEnabled = !controlsEnabled;
-            ApplyControlsState();
-        }
+        // ESC handling moved to PauseManager
     }
 
     void LateUpdate()
@@ -106,6 +107,11 @@ public class SimpleCameraOrbit : MonoBehaviour
             float rawT = Mathf.Clamp01(transitionTimer / transitionDuration);
             // 使用Inspector可编辑的动画曲线
             float t = viewTransitionCurve.Evaluate(rawT);
+
+            // Blend shake weight: fade out when transitioning to free look, fade in when returning
+            float targetShakeWeight = transitionToFreeLook ? 0f : 1f;
+            transitionShakeWeight = Mathf.MoveTowards(transitionShakeWeight, targetShakeWeight,
+                Time.unscaledDeltaTime * shakeTransitionBlendSpeed);
 
             Vector3 targetPos;
             Quaternion targetRot1;
@@ -125,7 +131,10 @@ public class SimpleCameraOrbit : MonoBehaviour
                 targetRot1 = Quaternion.Euler(pitch, yaw, 0);
             }
 
-            transform.position = Vector3.Lerp(transitionStartPos, targetPos, t);
+            // Compute shake offset with transition weight
+            Vector3 shakeOff = ComputeShakeOffset() * transitionShakeWeight;
+
+            transform.position = Vector3.Lerp(transitionStartPos, targetPos, t) + shakeOff;
             transform.rotation = Quaternion.Slerp(transitionStartRot, targetRot1, t);
 
             // 过渡期间仍允许鼠标输入
@@ -133,13 +142,14 @@ public class SimpleCameraOrbit : MonoBehaviour
             {
                 Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
                 yaw += delta.x;
-                pitch -= delta.y;
+                pitch += (invertY ? delta.y : -delta.y);
                 pitch = Mathf.Clamp(pitch, transitionToFreeLook ? -30f : -80f, 80f);
             }
 
             if (rawT >= 1f)
             {
                 isTransitioning = false;
+                transitionShakeWeight = transitionToFreeLook ? 0f : 1f;
             }
             return;
         }
@@ -151,7 +161,7 @@ public class SimpleCameraOrbit : MonoBehaviour
             {
                 Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
                 yaw += delta.x;
-                pitch -= delta.y;
+                pitch += (invertY ? delta.y : -delta.y);
                 pitch = Mathf.Clamp(pitch, -30f, 80f);
             }
 
@@ -167,7 +177,7 @@ public class SimpleCameraOrbit : MonoBehaviour
         {
             Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
             yaw += delta.x;
-            pitch -= delta.y;
+            pitch += (invertY ? delta.y : -delta.y);
             pitch = Mathf.Clamp(pitch, -80f, 80f);
         }
 
@@ -195,18 +205,10 @@ public class SimpleCameraOrbit : MonoBehaviour
         }
 
         // ����ƫ��
-        Vector3 shakeOffset = Vector3.zero;
-        if (controlsEnabled && currentShakeIntensity > 0.01f)
-        {
-            float freq = Mathf.Lerp(0.5f, maxShakeFrequency, currentShakeIntensity);
-            float hAmp = horizontalShakeAmplitude * currentShakeIntensity;
-            float vAmp = verticalShakeAmplitude * currentShakeIntensity;
-            shakePhase += Time.deltaTime * freq;
-            float xShake = Mathf.Sin(shakePhase) * hAmp;
-            float yShake = Mathf.Sin(shakePhase * 2f) * vAmp;
-            shakeOffset = transform.right * xShake + transform.up * yShake;
-        }
-        else
+        Vector3 shakeOffset = ComputeShakeOffset();
+        // Only reset phase when shake is genuinely disabled, not at zero-crossings
+        // (resetting at zero-crossings breaks the figure-8 Lissajous pattern)
+        if (!enableShake || currentShakeIntensity <= 0.01f)
         {
             shakePhase = 0f;
         }
@@ -275,6 +277,24 @@ public class SimpleCameraOrbit : MonoBehaviour
         pitchOffsetRaw = Mathf.SmoothDamp(pitchOffsetRaw, targetOffset, ref pitchOffsetVelocity, pitchSmoothTime);
     }
 
+    /// <summary>
+    /// Computes camera shake offset based on current state. Can be called from
+    /// both the normal path and transition path to support weighted blending.
+    /// </summary>
+    private Vector3 ComputeShakeOffset()
+    {
+        if (!controlsEnabled || !enableShake || currentShakeIntensity <= 0.01f)
+            return Vector3.zero;
+
+        float freq = Mathf.Lerp(0.5f, maxShakeFrequency, currentShakeIntensity);
+        float hAmp = horizontalShakeAmplitude * currentShakeIntensity * shakeIntensityMultiplier;
+        float vAmp = verticalShakeAmplitude * currentShakeIntensity * shakeIntensityMultiplier;
+        shakePhase += Time.deltaTime * freq;
+        float xShake = Mathf.Sin(shakePhase) * hAmp;
+        float yShake = Mathf.Sin(shakePhase * 2f) * vAmp;
+        return transform.right * xShake + transform.up * yShake;
+    }
+
     private void ApplyControlsState()
     {
         if (controlsEnabled)
@@ -294,6 +314,12 @@ public class SimpleCameraOrbit : MonoBehaviour
 
     private void OnApplicationFocus(bool hasFocus)
     {
+        // Don't re-enable controls if the game is paused
+        if (PauseManager.Instance != null && PauseManager.Instance.IsPaused)
+        {
+            controlsEnabled = false;
+            return;
+        }
         controlsEnabled = hasFocus;
         ApplyControlsState();
     }
