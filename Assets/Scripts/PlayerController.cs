@@ -37,6 +37,7 @@ public class PlayerController : MonoBehaviour
     private Vector2 _moveInput;
     private bool _jumpPressed;
     private bool _jumpHeld;
+    private bool _jumpTriggerFlag;
 
     // ���״̬
     private bool _isSprinting;
@@ -75,6 +76,13 @@ public class PlayerController : MonoBehaviour
     public Vector2 GetRawMoveInput() => _moveInput;
     public bool GetRawJumpPressed() => _jumpPressed;
 
+    public bool ConsumeJumpTrigger()
+    {
+        bool v = _jumpTriggerFlag;
+        _jumpTriggerFlag = false;
+        return v;
+    }
+
     // �����ⲿ����
     public void SetExternalInput(Vector2 move, bool jump, bool sprint)
     {
@@ -106,6 +114,7 @@ public class PlayerController : MonoBehaviour
         {
             _jumpPressed = true;
             _jumpBufferTimer = jumpBufferTime;
+            _jumpTriggerFlag = true;
         }
         else
         {
