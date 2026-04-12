@@ -41,6 +41,8 @@ public class CloneManager : MonoBehaviour
     private Quaternion lockedCameraRotation;
     private InputAction qAction;
     private InputAction tabAction;
+    private InputAction eAction;
+    private TraceCloneManager traceCloneManager;
 
     // �����ڣ���ֹ����˲�䱻�����٣�
     private float spawnProtectionTimer = 0f;
@@ -53,12 +55,15 @@ public class CloneManager : MonoBehaviour
         playerController = player.GetComponent<PlayerController>();
         playerCharController = player.GetComponent<CharacterController>();
         cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
+        traceCloneManager = GetComponent<TraceCloneManager>();
 
         var inputActions = new InputActionMap();
         qAction = inputActions.AddAction("Q", binding: "<Keyboard>/q");
         tabAction = inputActions.AddAction("Tab", binding: "<Keyboard>/tab");
+        eAction = inputActions.AddAction("E", binding: "<Keyboard>/e");
         qAction.performed += OnQPerformed;
         tabAction.performed += OnTabPerformed;
+        eAction.performed += OnEPerformed;
         inputActions.Enable();
     }
 
@@ -96,9 +101,19 @@ public class CloneManager : MonoBehaviour
     private void OnQPerformed(InputAction.CallbackContext ctx)
     {
         if (!isTimeStopped)
+        {
+            // If trace phantom is active, switch from trace to vision
+            if (traceCloneManager != null && traceCloneManager.IsPhantomActive())
+            {
+                traceCloneManager.HandleQDuringPhantom();
+                return;
+            }
             ActivateVisionClone();
+        }
         else
+        {
             ExitTimeStop(true);
+        }
     }
 
     private void OnTabPerformed(InputAction.CallbackContext ctx)
@@ -107,11 +122,50 @@ public class CloneManager : MonoBehaviour
             ToggleCarrierSelection();
     }
 
+    private void OnEPerformed(InputAction.CallbackContext ctx)
+    {
+        if (isTimeStopped && isCloneActive)
+            SwitchToTracePhantom();
+    }
+
+    private void SwitchToTracePhantom()
+    {
+        if (!isTimeStopped || !isCloneActive) return;
+
+        Debug.Log(">>> [CloneManager] Switching from vision clone to trace phantom");
+
+        // Exit vision clone without solid generation or trace clone handling
+        cameraLocked = false;
+        cameraOrbit.SetCameraLock(false, Quaternion.identity);
+
+        playerController.canMove = true;
+        playerController.freezeGravity = false;
+
+        if (currentClone != null) Destroy(currentClone);
+        if (triangleUI != null) Destroy(triangleUI);
+        DisablePlayerInput(player, false);
+
+        currentClone = null;
+        isCloneActive = false;
+        isTimeStopped = false;
+        hasSeparated = false;
+        selectedCarrier = null;
+        spawnProtectionTimer = 0f;
+
+        // Activate trace phantom (trace clone remains paused from vision activation)
+        if (traceCloneManager != null)
+            traceCloneManager.ActivateTracePhantom();
+    }
+
     private void ActivateVisionClone()
     {
         if (isCloneActive) return;
 
         if (currentSolidClone != null) Destroy(currentSolidClone);
+
+        // Pause existing trace clone during time-stop
+        if (traceCloneManager != null)
+            traceCloneManager.PauseTraceClone();
 
         Debug.Log(">>> ����ʱͣ�����ԣ�");
         cameraLocked = true;
@@ -162,7 +216,7 @@ public class CloneManager : MonoBehaviour
         Debug.Log("���������ɣ��������ڲ������Ұ");
     }
 
-    private void ExitTimeStop(bool shouldGenerateSolid)
+    private void ExitTimeStop(bool shouldGenerateSolid, bool handleTraceClone = true)
     {
         if (!isTimeStopped) return;
 
@@ -228,6 +282,22 @@ public class CloneManager : MonoBehaviour
         hasSeparated = false;
         selectedCarrier = null;
         spawnProtectionTimer = 0f;
+
+        // Handle trace clone: resume or replace
+        if (handleTraceClone && traceCloneManager != null)
+        {
+            if (traceCloneManager.HasSavedSequence() && shouldGenerateSolid)
+            {
+                // New sequence saved during trace-to-vision switch: spawn new trace clone
+                traceCloneManager.SpawnTraceCloneFromSaved();
+            }
+            else
+            {
+                // No new sequence or exit was forced: discard saved and resume old
+                traceCloneManager.ClearSavedSequence();
+                traceCloneManager.ResumeTraceClone();
+            }
+        }
     }
 
     private void ToggleCarrierSelection()
@@ -393,10 +463,10 @@ public class CloneManager : MonoBehaviour
         if (currentSolidClone != null) Destroy(currentSolidClone);
     }
 
-    public void ForceExitTimeStop(bool shouldGenerateSolid)
+    public void ForceExitTimeStop(bool shouldGenerateSolid, bool handleTraceClone = true)
     {
         if (isTimeStopped)
-            ExitTimeStop(shouldGenerateSolid);
+            ExitTimeStop(shouldGenerateSolid, handleTraceClone);
     }
 
     public void ActivateVisionCloneFromTrace()

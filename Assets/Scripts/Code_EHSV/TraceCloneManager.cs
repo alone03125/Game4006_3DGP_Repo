@@ -46,6 +46,9 @@ public class TraceCloneManager : MonoBehaviour
     private List<TickRecord> savedTicks = new List<TickRecord>();
     private bool hasSavedSequence = false;
 
+    // Trace clone pause state during time-stop
+    private bool isTraceClonePaused = false;
+
     private CloneManager cloneManager;
 
     private void Awake()
@@ -91,7 +94,7 @@ public class TraceCloneManager : MonoBehaviour
             SwitchToVisionClone();
     }
 
-    private void ActivateTracePhantom()
+    public void ActivateTracePhantom()
     {
         if (isPhantomActive) return;
 
@@ -100,7 +103,9 @@ public class TraceCloneManager : MonoBehaviour
         savedTicks.Clear();
 
         if (cloneManager != null && cloneManager.IsTimeStopped())
-            cloneManager.ForceExitTimeStop(false);
+            cloneManager.ForceExitTimeStop(false, false); // Don't handle trace clone, we handle it
+
+        PauseTraceClone(); // Pause existing trace clone during time-stop
 
         Debug.Log(">>> [TraceClone] Enter trace phantom state (time stop)");
 
@@ -221,6 +226,7 @@ public class TraceCloneManager : MonoBehaviour
         if (ticks == null || ticks.Count == 0) return;
 
         if (currentTraceClone != null) Destroy(currentTraceClone);
+        isTraceClonePaused = false;
 
         Vector3 spawnPos = player.transform.position;
         Quaternion spawnRot = player.transform.rotation;
@@ -265,6 +271,45 @@ public class TraceCloneManager : MonoBehaviour
     public bool HasSavedSequence() => hasSavedSequence;
     public bool IsTimeStopped() => isTimeStopped;
     public bool IsPhantomActive() => isPhantomActive;
+
+    /// <summary>
+    /// Pauses the current trace clone's replay and hides it.
+    /// Called when any time-stop begins to prevent coexistence.
+    /// </summary>
+    public void PauseTraceClone()
+    {
+        if (currentTraceClone == null) return;
+        var replay = currentTraceClone.GetComponent<TraceCloneReplay>();
+        if (replay != null) replay.enabled = false;
+        var renderers = currentTraceClone.GetComponentsInChildren<Renderer>();
+        foreach (var r in renderers) r.enabled = false;
+        isTraceClonePaused = true;
+        Debug.Log("[TraceClone] Trace clone paused and hidden");
+    }
+
+    /// <summary>
+    /// Resumes the current trace clone's replay and makes it visible.
+    /// Called when time-stop ends without a new trace sequence.
+    /// </summary>
+    public void ResumeTraceClone()
+    {
+        if (currentTraceClone == null || !isTraceClonePaused) return;
+        var replay = currentTraceClone.GetComponent<TraceCloneReplay>();
+        if (replay != null) replay.enabled = true;
+        var renderers = currentTraceClone.GetComponentsInChildren<Renderer>();
+        foreach (var r in renderers) r.enabled = true;
+        isTraceClonePaused = false;
+        Debug.Log("[TraceClone] Trace clone resumed and visible");
+    }
+
+    /// <summary>
+    /// Discards any saved sequence from a previous trace phantom session.
+    /// </summary>
+    public void ClearSavedSequence()
+    {
+        hasSavedSequence = false;
+        savedTicks.Clear();
+    }
 
     public void ForceExitAndRecord()
     {
@@ -319,6 +364,8 @@ public class TraceCloneManager : MonoBehaviour
         hasSavedSequence = false;
 
         DisablePlayerInput(player, false);
+
+        ResumeTraceClone(); // Resume old trace clone since ESC discards everything
     }
 
     private void ReplaceMaterials(GameObject obj, Material mat)
