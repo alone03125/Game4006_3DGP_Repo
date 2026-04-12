@@ -14,41 +14,31 @@ public class TraceCloneManager : MonoBehaviour
     public float snapshotInterval = 0.1f;
 
     [Header("回放空间修正")]
-    [Tooltip("空间修正容差：位置偏差在此范围内执行刚性位置修正")]
     public float correctionTolerance = 0.3f;
-    [Tooltip("修正消除阈值：偏差超过此值则永久取消本次行动的空间修正")]
     public float correctionBreakThreshold = 1.5f;
-    [Tooltip("跳跃前瞻时间窗口（秒）：落地时在此时间内搜索跳跃事件")]
     public float jumpLookaheadWindow = 0.15f;
-    [Tooltip("跳跃回溯时间窗口（秒）：落地时在过去此时间内搜索未执行的跳跃事件")]
     public float jumpLookbackWindow = 0.12f;
 
     // === 事件驱动的录制数据结构 ===
-
-    /// <summary>
-    /// 输入事件：记录输入状态变化的精确时刻
-    /// </summary>
     [System.Serializable]
     public struct InputEvent
     {
-        public float time;           // 精确时间戳
+        public float time;           // 相对录制开始的 fixedTime
         public InputEventType type;
-        public Vector2 moveValue;    // Move事件的值
-        public float cameraYaw;      // 每个事件都记录当时的摄像机朝向
-        public bool sprintState;     // 每个事件都记录当时的冲刺状态
+        public Vector2 moveValue;
+        public float cameraYaw;
+        public bool sprintState;
+        public bool jumpState;       // 新增：明确记录跳跃按下/释放状态
     }
 
     public enum InputEventType
     {
-        MoveChanged,     // 移动输入变化
-        JumpPressed,     // 跳跃按下
-        JumpReleased,    // 跳跃松开
-        SprintChanged,   // 冲刺状态变化
+        MoveChanged,
+        JumpPressed,
+        JumpReleased,
+        SprintChanged,
     }
 
-    /// <summary>
-    /// 状态快照：定期记录的关键状态，用于空间修正
-    /// </summary>
     [System.Serializable]
     public struct StateSnapshot
     {
@@ -56,7 +46,7 @@ public class TraceCloneManager : MonoBehaviour
         public Vector3 position;
         public Quaternion rotation;
         public bool grounded;
-        public Vector3 velocity;     // 记录速度用于更精确的校验
+        public Vector3 velocity;
     }
 
     // 状态
@@ -69,7 +59,6 @@ public class TraceCloneManager : MonoBehaviour
     private SimpleCameraOrbit cameraOrbit;
     private GameObject player;
 
-    // 保存摄像机原始状态
     private Transform originalCameraTarget;
     private Vector3 originalHeadOffset;
     private bool originalCameraControlsEnabled;
@@ -77,16 +66,16 @@ public class TraceCloneManager : MonoBehaviour
     // 录制数据
     private List<InputEvent> recordedEvents = new List<InputEvent>();
     private List<StateSnapshot> recordedSnapshots = new List<StateSnapshot>();
-    private float recordStartTime;
-    private float lastSnapshotTime;
+    private float recordStartFixedTime;      // 改用 fixedTime
+    private float lastSnapshotFixedTime;
     private bool isRecording = false;
 
-    // 上一帧输入状态（用于检测变化）
+    // 上一帧输入状态
     private Vector2 prevMoveInput;
     private bool prevJumpState;
     private bool prevSprintState;
 
-    // 已保存的操作序列
+    // 已保存序列
     private List<InputEvent> savedEvents = new List<InputEvent>();
     private List<StateSnapshot> savedSnapshots = new List<StateSnapshot>();
     private bool hasSavedSequence = false;
@@ -102,9 +91,6 @@ public class TraceCloneManager : MonoBehaviour
         cloneManager = GetComponent<CloneManager>();
     }
 
-    /// <summary>
-    /// 由PlayerInput组件通过SendMessages调用，绑定TraceActivate操作
-    /// </summary>
     void OnTraceActivate(InputValue value)
     {
         if (!value.isPressed) return;
@@ -114,15 +100,16 @@ public class TraceCloneManager : MonoBehaviour
             ExitTracePhantomAndSpawnClone();
     }
 
-    private void Update()
+    // 核心改动：录制逻辑移至 FixedUpdate
+    private void FixedUpdate()
     {
         if (!isTimeStopped || !isPhantomActive || !isRecording) return;
         if (phantomController == null) return;
 
-        float now = Time.unscaledTime;
-        float elapsed = now - recordStartTime;
+        float nowFixed = Time.fixedTime;
+        float elapsed = nowFixed - recordStartFixedTime;
 
-        // 检测输入变化并生成事件
+        // 检测输入变化
         Vector2 curMove = phantomController.GetRawMoveInput();
         bool curJump = phantomController.GetRawJumpPressed();
         bool curSprint = phantomController.IsSprinting;
@@ -130,72 +117,75 @@ public class TraceCloneManager : MonoBehaviour
 
         if (curMove != prevMoveInput)
         {
-            recordedEvents.Add(new InputEvent {
+            recordedEvents.Add(new InputEvent
+            {
                 time = elapsed,
                 type = InputEventType.MoveChanged,
                 moveValue = curMove,
                 cameraYaw = curYaw,
-                sprintState = curSprint
+                sprintState = curSprint,
+                jumpState = curJump
             });
             prevMoveInput = curMove;
         }
 
         if (curJump && !prevJumpState)
         {
-            recordedEvents.Add(new InputEvent {
+            recordedEvents.Add(new InputEvent
+            {
                 time = elapsed,
                 type = InputEventType.JumpPressed,
                 moveValue = curMove,
                 cameraYaw = curYaw,
-                sprintState = curSprint
+                sprintState = curSprint,
+                jumpState = true
             });
         }
         else if (!curJump && prevJumpState)
         {
-            recordedEvents.Add(new InputEvent {
+            recordedEvents.Add(new InputEvent
+            {
                 time = elapsed,
                 type = InputEventType.JumpReleased,
                 moveValue = curMove,
                 cameraYaw = curYaw,
-                sprintState = curSprint
+                sprintState = curSprint,
+                jumpState = false
             });
         }
         prevJumpState = curJump;
 
         if (curSprint != prevSprintState)
         {
-            recordedEvents.Add(new InputEvent {
+            recordedEvents.Add(new InputEvent
+            {
                 time = elapsed,
                 type = InputEventType.SprintChanged,
                 moveValue = curMove,
                 cameraYaw = curYaw,
-                sprintState = curSprint
+                sprintState = curSprint,
+                jumpState = curJump
             });
             prevSprintState = curSprint;
         }
 
         // 定期状态快照
-        if (now - lastSnapshotTime >= snapshotInterval)
+        if (nowFixed - lastSnapshotFixedTime >= snapshotInterval)
         {
             var cc = phantomController.Controller;
-            recordedSnapshots.Add(new StateSnapshot {
+            Vector3 velocity = phantomController.GetCurrentHorizontalSpeed() * currentPhantom.transform.forward +
+                               Vector3.up * phantomController.GetCurrentVerticalSpeed();
+
+            recordedSnapshots.Add(new StateSnapshot
+            {
                 time = elapsed,
                 position = currentPhantom.transform.position,
                 rotation = currentPhantom.transform.rotation,
                 grounded = cc != null && cc.isGrounded,
-                velocity = Vector3.zero
+                velocity = velocity
             });
-            lastSnapshotTime = now;
-
-            if (recordedSnapshots.Count % 20 == 0)
-                Debug.Log($"[TraceClone] {recordedEvents.Count} events, {recordedSnapshots.Count} snapshots, t={elapsed:F3}s");
+            lastSnapshotFixedTime = nowFixed;
         }
-    }
-
-    public void HandleQDuringPhantom()
-    {
-        if (isTimeStopped && isPhantomActive)
-            SwitchToVisionClone();
     }
 
     private void ActivateTracePhantom()
@@ -209,7 +199,7 @@ public class TraceCloneManager : MonoBehaviour
         if (cloneManager != null && cloneManager.IsTimeStopped())
             cloneManager.ForceExitTimeStop(false);
 
-        Debug.Log(">>> [TraceClone] Enter trace phantom state (time stop)");
+        Debug.Log(">>> [TraceClone] Enter trace phantom state (deterministic record)");
 
         originalCameraTarget = cameraOrbit.target;
         originalHeadOffset = cameraOrbit.headOffset;
@@ -238,7 +228,6 @@ public class TraceCloneManager : MonoBehaviour
         if (phantomCam != null) phantomCam.enabled = false;
 
         IgnoreCollisionBetween(player, currentPhantom, true);
-
         if (currentTraceClone != null)
             IgnoreCollisionBetween(currentTraceClone, currentPhantom, true);
 
@@ -247,16 +236,17 @@ public class TraceCloneManager : MonoBehaviour
         // 初始化录制
         recordedEvents.Clear();
         recordedSnapshots.Clear();
-        recordStartTime = Time.unscaledTime;
-        lastSnapshotTime = Time.unscaledTime;
+        recordStartFixedTime = Time.fixedTime;
+        lastSnapshotFixedTime = Time.fixedTime;
         isRecording = true;
 
         prevMoveInput = Vector2.zero;
         prevJumpState = false;
         prevSprintState = false;
 
-        // 记录初始状态快照
-        recordedSnapshots.Add(new StateSnapshot {
+        // 初始快照
+        recordedSnapshots.Add(new StateSnapshot
+        {
             time = 0f,
             position = spawnPos,
             rotation = spawnRot,
@@ -269,18 +259,16 @@ public class TraceCloneManager : MonoBehaviour
 
         DisablePlayerInput(player, true);
         EnablePlayerInput(currentPhantom, true);
-
-        Debug.Log($"[TraceClone] Event recording started");
     }
 
     private void FinalizeRecording()
     {
         if (phantomController == null) return;
-        float elapsed = Time.unscaledTime - recordStartTime;
+        float elapsed = Time.fixedTime - recordStartFixedTime;
 
-        // 最终快照
         var cc = phantomController.Controller;
-        recordedSnapshots.Add(new StateSnapshot {
+        recordedSnapshots.Add(new StateSnapshot
+        {
             time = elapsed,
             position = currentPhantom.transform.position,
             rotation = currentPhantom.transform.rotation,
@@ -324,8 +312,6 @@ public class TraceCloneManager : MonoBehaviour
         hasSavedSequence = false;
 
         DisablePlayerInput(player, false);
-
-        Debug.Log("[TraceClone] Trace clone spawned and replaying");
     }
 
     private void SwitchToVisionClone()
@@ -390,14 +376,14 @@ public class TraceCloneManager : MonoBehaviour
         traceController.useCameraOverride = true;
         traceController.faceMovementDirection = false;
         traceController.freezeGravity = false;
-        traceController.useFixedUpdateMode = true;  // 确定性FixedUpdate驱动
+        traceController.useFixedUpdateMode = true;
 
         var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
         replay.Initialize(events, snapshots, traceController,
             correctionTolerance, correctionBreakThreshold,
             jumpLookaheadWindow, jumpLookbackWindow);
 
-        Debug.Log($"[TraceClone] Trace clone spawned, {events.Count} events, {snapshots.Count} snapshots");
+        Debug.Log($"[TraceClone] Trace clone spawned (deterministic mode)");
     }
 
     public void SpawnTraceCloneFromSaved()
@@ -411,42 +397,22 @@ public class TraceCloneManager : MonoBehaviour
         hasSavedSequence = false;
         savedEvents.Clear();
         savedSnapshots.Clear();
-        Debug.Log("[TraceClone] Spawned trace clone from saved sequence");
     }
 
     public bool HasSavedSequence() => hasSavedSequence;
     public bool IsTimeStopped() => isTimeStopped;
     public bool IsPhantomActive() => isPhantomActive;
 
-    public void ForceExitAndRecord()
+    public void HandleQDuringPhantom()
     {
-        if (!isPhantomActive) return;
-
-        FinalizeRecording();
-
-        cameraOrbit.target = originalCameraTarget;
-        cameraOrbit.SetFreeLookMode(false);
-        cameraOrbit.headOffset = originalHeadOffset;
-        cameraOrbit.SetControlsEnabled(originalCameraControlsEnabled);
-
-        playerController.canMove = true;
-        playerController.freezeGravity = false;
-
-        Destroy(currentPhantom);
-        currentPhantom = null;
-        phantomController = null;
-
-        isPhantomActive = false;
-        isTimeStopped = false;
-        isRecording = false;
-
-        DisablePlayerInput(player, false);
+        if (isTimeStopped && isPhantomActive)
+            SwitchToVisionClone();
     }
 
+    // ---------- 辅助方法 ----------
     private void ReplaceMaterials(GameObject obj, Material mat)
     {
-        var renderers = obj.GetComponentsInChildren<Renderer>();
-        foreach (var rend in renderers)
+        foreach (var rend in obj.GetComponentsInChildren<Renderer>())
             rend.material = mat;
     }
 
