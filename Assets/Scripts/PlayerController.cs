@@ -49,7 +49,7 @@ public class PlayerController : MonoBehaviour
     private bool externalSprint;
     private bool prevExternalJump;
 
-    // 摄像机方向覆盖（用于循迹分身回放）
+    // camera override for trace clone replay
     [HideInInspector] public bool useCameraOverride = false;
     [HideInInspector] public float overrideCameraYaw = 0f;
 
@@ -83,6 +83,16 @@ public class PlayerController : MonoBehaviour
         externalSprint = sprint;
     }
 
+    [Header("External Jump Buffer")]
+    public float externalJumpBufferTime = 0.3f;
+
+    public void TriggerJumpBuffer()
+    {
+        _jumpBufferTimer = externalJumpBufferTime;
+    }
+
+    [HideInInspector] public bool useFixedUpdateMode = false;
+
     void Start()
     {
         _controller = GetComponent<CharacterController>();
@@ -108,22 +118,38 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         if (freezeGravity) return;
+        if (useFixedUpdateMode) return;
 
-        // 外部输入跳跃：检测上升沿以触发跳跃缓冲
         if (useExternalInput)
         {
             if (externalJump && !prevExternalJump)
-            {
-                _jumpBufferTimer = jumpBufferTime;
-            }
+                _jumpBufferTimer = externalJumpBufferTime;
             prevExternalJump = externalJump;
         }
 
-        // ���¼�ʱ��
+        DoMovementTick(Time.deltaTime);
+    }
+
+    void FixedUpdate()
+    {
+        if (!useFixedUpdateMode || freezeGravity) return;
+
+        if (useExternalInput)
+        {
+            if (externalJump && !prevExternalJump)
+                _jumpBufferTimer = externalJumpBufferTime;
+            prevExternalJump = externalJump;
+        }
+
+        DoMovementTick(Time.fixedDeltaTime);
+    }
+
+    private void DoMovementTick(float dt)
+    {
         if (_jumpBufferTimer > 0)
-            _jumpBufferTimer -= Time.deltaTime;
+            _jumpBufferTimer -= dt;
         if (_coyoteTimer > 0)
-            _coyoteTimer -= Time.deltaTime;
+            _coyoteTimer -= dt;
 
         bool grounded = _controller.isGrounded;
 
@@ -147,7 +173,7 @@ public class PlayerController : MonoBehaviour
             _coyoteTimer = 0f;
         }
 
-        _jumpVelocity.y -= gravity * Time.deltaTime;
+        _jumpVelocity.y -= gravity * dt;
 
         Vector3 horizontalMotion = Vector3.zero;
         Vector3 desiredVel = CalculateDesiredHorizontalVelocity();
@@ -162,12 +188,12 @@ public class PlayerController : MonoBehaviour
                 _airHorizontalVelocity = Vector3.MoveTowards(
                     _airHorizontalVelocity,
                     desiredVel,
-                    airAcceleration * Time.deltaTime
+                    airAcceleration * dt
                 );
             }
             else
             {
-                _airHorizontalVelocity *= (1f - airDrag * Time.deltaTime);
+                _airHorizontalVelocity *= (1f - airDrag * dt);
                 if (_airHorizontalVelocity.magnitude < 0.01f)
                     _airHorizontalVelocity = Vector3.zero;
             }
@@ -183,7 +209,7 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector3 motion = horizontalMotion + _jumpVelocity;
-        _controller.Move(motion * Time.deltaTime);
+        _controller.Move(motion * dt);
 
         // ��ɫ����
         if (canMove && !freezeGravity)
@@ -205,7 +231,7 @@ public class PlayerController : MonoBehaviour
                         if (moveDir != Vector3.zero)
                         {
                             Quaternion targetRot = Quaternion.LookRotation(moveDir);
-                            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSpeed * Time.deltaTime);
+                            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSpeed * dt);
                         }
                     }
                 }
@@ -227,7 +253,7 @@ public class PlayerController : MonoBehaviour
                 if (camForward != Vector3.zero)
                 {
                     Quaternion targetRotation = Quaternion.LookRotation(camForward);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * dt);
                 }
             }
         }
