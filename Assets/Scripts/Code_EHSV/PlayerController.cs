@@ -6,7 +6,7 @@ public class PlayerController : MonoBehaviour
 {
     private CharacterController _controller;
 
-    [Header("移动参数")]
+    [Header("�ƶ�����")]
     public float moveSpeed = 5.0f;
     public float sprintMultiplier = 1.5f;
     public float forwardFactor = 1.0f;
@@ -14,46 +14,45 @@ public class PlayerController : MonoBehaviour
     public float backFactor = 0.5f;
     public float rotateSpeed = 10.0f;
 
-    [Header("空中参数")]
+    [Header("�����ƶ�����")]
     public float airAcceleration = 8f;
     public float airDrag = 3f;
     public float airTurnSpeed = 5f;
     public float maxAirSpeed = 8f;
 
-    [Header("跳跃与重力")]
+    [Header("��Ծ����")]
     public float jumpForce = 2.2f;
     public float gravity = 12f;
     public float jumpBufferTime = 0.15f;
     public float coyoteTime = 0.1f;
 
-    [Header("状态控制")]
+    [Header("״̬����")]
     public bool canMove = true;
     public bool freezeGravity = false;
 
-    [Header("面向方向")]
+    [Header("����ר������")]
     public bool faceMovementDirection = false;
 
-    // 内部输入
+    // ���뻺��
     private Vector2 _moveInput;
     private bool _jumpPressed;
     private bool _jumpHeld;
+    private bool _jumpTriggerFlag;
 
+    // ���״̬
     private bool _isSprinting;
     public bool IsSprinting => useExternalInput ? externalSprint : _isSprinting;
 
-    // 外部输入控制（用于回放）
+    // �ⲿ���븲��
     [HideInInspector] public bool useExternalInput = false;
     private Vector2 externalMoveInput;
     private bool externalJump;
     private bool externalSprint;
     private bool prevExternalJump;
 
-    // 摄像机覆写
+    // camera override for trace clone replay
     [HideInInspector] public bool useCameraOverride = false;
     [HideInInspector] public float overrideCameraYaw = 0f;
-
-    // 外部修正速度（用于平滑空间修正/轨迹跟随）
-    private Vector3 externalCorrectionVelocity;
 
     public float CurrentMaxSpeed => moveSpeed * (IsSprinting ? sprintMultiplier : 1f);
     public bool IsAirborne { get; private set; }
@@ -68,13 +67,23 @@ public class PlayerController : MonoBehaviour
 
     public CharacterController Controller => _controller;
 
+    // ��ȡ��ǰ��Ч���루���ⲿ��¼��
     public Vector2 GetEffectiveMoveInput() => useExternalInput ? externalMoveInput : _moveInput;
     public bool GetEffectiveJump() => useExternalInput ? externalJump : _jumpPressed;
     public bool GetEffectiveSprint() => useExternalInput ? externalSprint : _isSprinting;
 
+    // ��ȡԭʼ����
     public Vector2 GetRawMoveInput() => _moveInput;
     public bool GetRawJumpPressed() => _jumpPressed;
 
+    public bool ConsumeJumpTrigger()
+    {
+        bool v = _jumpTriggerFlag;
+        _jumpTriggerFlag = false;
+        return v;
+    }
+
+    // �����ⲿ����
     public void SetExternalInput(Vector2 move, bool jump, bool sprint)
     {
         externalMoveInput = move;
@@ -82,23 +91,12 @@ public class PlayerController : MonoBehaviour
         externalSprint = sprint;
     }
 
-    [Header("外部跳跃缓冲时间")]
+    [Header("External Jump Buffer")]
     public float externalJumpBufferTime = 0.3f;
 
     public void TriggerJumpBuffer()
     {
         _jumpBufferTimer = externalJumpBufferTime;
-    }
-
-    public void AddExternalVelocity(Vector3 velocity, float dampingAmount)
-    {
-        externalCorrectionVelocity += velocity;
-        externalCorrectionVelocity = Vector3.Lerp(externalCorrectionVelocity, Vector3.zero, dampingAmount);
-    }
-
-    public void AddExternalVelocity(Vector3 velocity)
-    {
-        externalCorrectionVelocity += velocity;
     }
 
     [HideInInspector] public bool useFixedUpdateMode = false;
@@ -116,6 +114,7 @@ public class PlayerController : MonoBehaviour
         {
             _jumpPressed = true;
             _jumpBufferTimer = jumpBufferTime;
+            _jumpTriggerFlag = true;
         }
         else
         {
@@ -219,16 +218,9 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector3 motion = horizontalMotion + _jumpVelocity;
-
-        // 叠加外部修正速度（轨迹跟随力）
-        motion += externalCorrectionVelocity;
-
         _controller.Move(motion * dt);
 
-        // 衰减外部修正速度
-        externalCorrectionVelocity = Vector3.Lerp(externalCorrectionVelocity, Vector3.zero, 5f * dt);
-
-        // 旋转
+        // ��ɫ����
         if (canMove && !freezeGravity)
         {
             if (faceMovementDirection)

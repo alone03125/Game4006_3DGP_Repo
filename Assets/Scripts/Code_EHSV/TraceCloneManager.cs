@@ -9,38 +9,18 @@ public class TraceCloneManager : MonoBehaviour
     public Material phantomMaterial;
     public Material traceCloneMaterial;
 
-    [Header("录制设置")]
-    [Tooltip("状态快照间隔（秒）")]
-    public float snapshotInterval = 0.1f;
+    // === 逐Tick录制数据结构 ===
 
-    // === 数据结构 ===
+    /// <summary>
+    /// 每个FixedUpdate记录一条，回放时逐条喂入，确保确定性一致
+    /// </summary>
     [System.Serializable]
-    public struct InputEvent
+    public struct TickRecord
     {
-        public float time;
-        public InputEventType type;
-        public Vector2 moveValue;
+        public Vector2 moveInput;
+        public bool jumpTrigger;   // 该Tick是否有新的跳跃按下
+        public bool sprint;
         public float cameraYaw;
-        public bool sprintState;
-        public bool jumpState;
-    }
-
-    public enum InputEventType
-    {
-        MoveChanged,
-        JumpPressed,
-        JumpReleased,
-        SprintChanged,
-    }
-
-    [System.Serializable]
-    public struct StateSnapshot
-    {
-        public float time;
-        public Vector3 position;
-        public Quaternion rotation;
-        public bool grounded;
-        public Vector3 velocity;
     }
 
     // 状态
@@ -53,24 +33,17 @@ public class TraceCloneManager : MonoBehaviour
     private SimpleCameraOrbit cameraOrbit;
     private GameObject player;
 
+    // 保存摄像机原始状态
     private Transform originalCameraTarget;
     private Vector3 originalHeadOffset;
     private bool originalCameraControlsEnabled;
 
     // 录制数据
-    private List<InputEvent> recordedEvents = new List<InputEvent>();
-    private List<StateSnapshot> recordedSnapshots = new List<StateSnapshot>();
-    private float recordStartFixedTime;
-    private float lastSnapshotFixedTime;
+    private List<TickRecord> recordedTicks = new List<TickRecord>();
     private bool isRecording = false;
 
-    private Vector2 prevMoveInput;
-    private bool prevJumpState;
-    private bool prevSprintState;
-
-    // 保存的序列
-    private List<InputEvent> savedEvents = new List<InputEvent>();
-    private List<StateSnapshot> savedSnapshots = new List<StateSnapshot>();
+    // 已保存的操作序列（切换到视界分身时暂存）
+    private List<TickRecord> savedTicks = new List<TickRecord>();
     private bool hasSavedSequence = false;
 
     private CloneManager cloneManager;
@@ -84,6 +57,9 @@ public class TraceCloneManager : MonoBehaviour
         cloneManager = GetComponent<CloneManager>();
     }
 
+    /// <summary>
+    /// 由PlayerInput组件通过SendMessages调用，绑定TraceActivate操作
+    /// </summary>
     void OnTraceActivate(InputValue value)
     {
         if (!value.isPressed) return;
@@ -93,105 +69,40 @@ public class TraceCloneManager : MonoBehaviour
             ExitTracePhantomAndSpawnClone();
     }
 
+    /// <summary>
+    /// 逐Tick录制：每个FixedUpdate记录一条phantom的输入状态
+    /// </summary>
     private void FixedUpdate()
     {
         if (!isTimeStopped || !isPhantomActive || !isRecording) return;
         if (phantomController == null) return;
 
-        float nowFixed = Time.fixedTime;
-        float elapsed = nowFixed - recordStartFixedTime;
+        recordedTicks.Add(new TickRecord {
+            moveInput = phantomController.GetRawMoveInput(),
+            jumpTrigger = phantomController.ConsumeJumpTrigger(),
+            sprint = phantomController.IsSprinting,
+            cameraYaw = Camera.main.transform.eulerAngles.y
+        });
+    }
 
-        // 检测输入变化
-        Vector2 curMove = phantomController.GetRawMoveInput();
-        bool curJump = phantomController.GetRawJumpPressed();
-        bool curSprint = phantomController.IsSprinting;
-        float curYaw = Camera.main.transform.eulerAngles.y;
-
-        if (curMove != prevMoveInput)
-        {
-            recordedEvents.Add(new InputEvent
-            {
-                time = elapsed,
-                type = InputEventType.MoveChanged,
-                moveValue = curMove,
-                cameraYaw = curYaw,
-                sprintState = curSprint,
-                jumpState = curJump
-            });
-            prevMoveInput = curMove;
-        }
-
-        if (curJump && !prevJumpState)
-        {
-            recordedEvents.Add(new InputEvent
-            {
-                time = elapsed,
-                type = InputEventType.JumpPressed,
-                moveValue = curMove,
-                cameraYaw = curYaw,
-                sprintState = curSprint,
-                jumpState = true
-            });
-        }
-        else if (!curJump && prevJumpState)
-        {
-            recordedEvents.Add(new InputEvent
-            {
-                time = elapsed,
-                type = InputEventType.JumpReleased,
-                moveValue = curMove,
-                cameraYaw = curYaw,
-                sprintState = curSprint,
-                jumpState = false
-            });
-        }
-        prevJumpState = curJump;
-
-        if (curSprint != prevSprintState)
-        {
-            recordedEvents.Add(new InputEvent
-            {
-                time = elapsed,
-                type = InputEventType.SprintChanged,
-                moveValue = curMove,
-                cameraYaw = curYaw,
-                sprintState = curSprint,
-                jumpState = curJump
-            });
-            prevSprintState = curSprint;
-        }
-
-        // 定期状态快照
-        if (nowFixed - lastSnapshotFixedTime >= snapshotInterval)
-        {
-            var cc = phantomController.Controller;
-            Vector3 velocity = phantomController.GetCurrentHorizontalSpeed() * currentPhantom.transform.forward +
-                               Vector3.up * phantomController.GetCurrentVerticalSpeed();
-
-            recordedSnapshots.Add(new StateSnapshot
-            {
-                time = elapsed,
-                position = currentPhantom.transform.position,
-                rotation = currentPhantom.transform.rotation,
-                grounded = cc != null && cc.isGrounded,
-                velocity = velocity
-            });
-            lastSnapshotFixedTime = nowFixed;
-        }
+    public void HandleQDuringPhantom()
+    {
+        if (isTimeStopped && isPhantomActive)
+            SwitchToVisionClone();
     }
 
     private void ActivateTracePhantom()
     {
         if (isPhantomActive) return;
 
+        // 每次进入都覆盖先前序列
         hasSavedSequence = false;
-        savedEvents.Clear();
-        savedSnapshots.Clear();
+        savedTicks.Clear();
 
         if (cloneManager != null && cloneManager.IsTimeStopped())
             cloneManager.ForceExitTimeStop(false);
 
-        Debug.Log(">>> [TraceClone] Enter trace phantom state");
+        Debug.Log(">>> [TraceClone] Enter trace phantom state (time stop)");
 
         originalCameraTarget = cameraOrbit.target;
         originalHeadOffset = cameraOrbit.headOffset;
@@ -214,66 +125,37 @@ public class TraceCloneManager : MonoBehaviour
         phantomController.canMove = true;
         phantomController.freezeGravity = false;
         phantomController.useExternalInput = false;
+        phantomController.useFixedUpdateMode = true;  // FixedUpdate驱动，与回放一致
         phantomController.enabled = true;
 
         var phantomCam = currentPhantom.GetComponentInChildren<Camera>();
         if (phantomCam != null) phantomCam.enabled = false;
 
         IgnoreCollisionBetween(player, currentPhantom, true);
+
         if (currentTraceClone != null)
             IgnoreCollisionBetween(currentTraceClone, currentPhantom, true);
 
         cameraOrbit.target = currentPhantom.transform;
 
-        recordedEvents.Clear();
-        recordedSnapshots.Clear();
-        recordStartFixedTime = Time.fixedTime;
-        lastSnapshotFixedTime = Time.fixedTime;
+        // 初始化录制
+        recordedTicks.Clear();
         isRecording = true;
-
-        prevMoveInput = Vector2.zero;
-        prevJumpState = false;
-        prevSprintState = false;
-
-        recordedSnapshots.Add(new StateSnapshot
-        {
-            time = 0f,
-            position = spawnPos,
-            rotation = spawnRot,
-            grounded = true,
-            velocity = Vector3.zero
-        });
 
         isPhantomActive = true;
         isTimeStopped = true;
 
         DisablePlayerInput(player, true);
         EnablePlayerInput(currentPhantom, true);
-    }
 
-    private void FinalizeRecording()
-    {
-        if (phantomController == null) return;
-        float elapsed = Time.fixedTime - recordStartFixedTime;
-
-        var cc = phantomController.Controller;
-        recordedSnapshots.Add(new StateSnapshot
-        {
-            time = elapsed,
-            position = currentPhantom.transform.position,
-            rotation = currentPhantom.transform.rotation,
-            grounded = cc != null && cc.isGrounded,
-            velocity = Vector3.zero
-        });
-
-        Debug.Log($"[TraceClone] Recording finalized: {recordedEvents.Count} events, {recordedSnapshots.Count} snapshots, duration={elapsed:F3}s");
+        Debug.Log("[TraceClone] Tick-based recording started");
     }
 
     private void ExitTracePhantomAndSpawnClone()
     {
         if (!isTimeStopped || !isPhantomActive) return;
 
-        FinalizeRecording();
+        Debug.Log($"[TraceClone] Recording finalized: {recordedTicks.Count} ticks");
 
         Time.timeScale = 1f;
 
@@ -285,10 +167,7 @@ public class TraceCloneManager : MonoBehaviour
         playerController.canMove = true;
         playerController.freezeGravity = false;
 
-        SpawnTraceClone(
-            new List<InputEvent>(recordedEvents),
-            new List<StateSnapshot>(recordedSnapshots)
-        );
+        SpawnTraceClone(new List<TickRecord>(recordedTicks));
 
         Destroy(currentPhantom);
         currentPhantom = null;
@@ -297,22 +176,22 @@ public class TraceCloneManager : MonoBehaviour
         isPhantomActive = false;
         isTimeStopped = false;
         isRecording = false;
-        recordedEvents.Clear();
-        recordedSnapshots.Clear();
+        recordedTicks.Clear();
         hasSavedSequence = false;
 
         DisablePlayerInput(player, false);
+
+        Debug.Log("[TraceClone] Trace clone spawned and replaying");
     }
 
-    public void SwitchToVisionClone()
+    private void SwitchToVisionClone()
     {
         if (!isTimeStopped || !isPhantomActive) return;
 
-        FinalizeRecording();
-
-        savedEvents = new List<InputEvent>(recordedEvents);
-        savedSnapshots = new List<StateSnapshot>(recordedSnapshots);
+        savedTicks = new List<TickRecord>(recordedTicks);
         hasSavedSequence = true;
+
+        Debug.Log($"[TraceClone] Saved {savedTicks.Count} ticks for later replay");
 
         cameraOrbit.target = originalCameraTarget;
         cameraOrbit.SetFreeLookMode(false);
@@ -329,8 +208,7 @@ public class TraceCloneManager : MonoBehaviour
         isPhantomActive = false;
         isTimeStopped = false;
         isRecording = false;
-        recordedEvents.Clear();
-        recordedSnapshots.Clear();
+        recordedTicks.Clear();
 
         DisablePlayerInput(player, false);
 
@@ -338,9 +216,9 @@ public class TraceCloneManager : MonoBehaviour
             cloneManager.ActivateVisionCloneFromTrace();
     }
 
-    private void SpawnTraceClone(List<InputEvent> events, List<StateSnapshot> snapshots)
+    private void SpawnTraceClone(List<TickRecord> ticks)
     {
-        if (events == null || events.Count == 0) return;
+        if (ticks == null || ticks.Count == 0) return;
 
         if (currentTraceClone != null) Destroy(currentTraceClone);
 
@@ -348,7 +226,7 @@ public class TraceCloneManager : MonoBehaviour
         Quaternion spawnRot = player.transform.rotation;
         currentTraceClone = Instantiate(playerPrefab, spawnPos, spawnRot);
         currentTraceClone.tag = "TraceClone";
-        currentTraceClone.name = "TraceClone_Follow";
+        currentTraceClone.name = "TraceClone";
         ReplaceMaterials(currentTraceClone, traceCloneMaterial);
 
         IgnoreCollisionBetween(player, currentTraceClone, true);
@@ -361,40 +239,60 @@ public class TraceCloneManager : MonoBehaviour
 
         var traceController = currentTraceClone.GetComponent<PlayerController>();
         traceController.enabled = true;
+        traceController.canMove = true;
+        traceController.useExternalInput = true;
+        traceController.useCameraOverride = true;
+        traceController.faceMovementDirection = false;
+        traceController.freezeGravity = false;
+        traceController.useFixedUpdateMode = true;
 
-        // 添加路径跟随组件（替代原来的 TraceCloneReplay）
-        var follow = currentTraceClone.AddComponent<TraceCloneFollowPath>();
-        follow.Initialize(events, snapshots, traceController);
+        var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
+        replay.Initialize(ticks, traceController);
 
-        Debug.Log("[TraceClone] Spawned path-following trace clone.");
+        Debug.Log($"[TraceClone] Trace clone spawned, {ticks.Count} ticks to replay");
     }
 
     public void SpawnTraceCloneFromSaved()
     {
-        if (!hasSavedSequence || savedEvents.Count == 0) return;
+        if (!hasSavedSequence || savedTicks.Count == 0) return;
 
-        SpawnTraceClone(
-            new List<InputEvent>(savedEvents),
-            new List<StateSnapshot>(savedSnapshots)
-        );
+        SpawnTraceClone(new List<TickRecord>(savedTicks));
         hasSavedSequence = false;
-        savedEvents.Clear();
-        savedSnapshots.Clear();
+        savedTicks.Clear();
+        Debug.Log("[TraceClone] Spawned trace clone from saved sequence");
     }
 
     public bool HasSavedSequence() => hasSavedSequence;
     public bool IsTimeStopped() => isTimeStopped;
     public bool IsPhantomActive() => isPhantomActive;
 
-    public void HandleQDuringPhantom()
+    public void ForceExitAndRecord()
     {
-        if (isTimeStopped && isPhantomActive)
-            SwitchToVisionClone();
+        if (!isPhantomActive) return;
+
+        cameraOrbit.target = originalCameraTarget;
+        cameraOrbit.SetFreeLookMode(false);
+        cameraOrbit.headOffset = originalHeadOffset;
+        cameraOrbit.SetControlsEnabled(originalCameraControlsEnabled);
+
+        playerController.canMove = true;
+        playerController.freezeGravity = false;
+
+        Destroy(currentPhantom);
+        currentPhantom = null;
+        phantomController = null;
+
+        isPhantomActive = false;
+        isTimeStopped = false;
+        isRecording = false;
+
+        DisablePlayerInput(player, false);
     }
 
     private void ReplaceMaterials(GameObject obj, Material mat)
     {
-        foreach (var rend in obj.GetComponentsInChildren<Renderer>())
+        var renderers = obj.GetComponentsInChildren<Renderer>();
+        foreach (var rend in renderers)
             rend.material = mat;
     }
 
