@@ -10,8 +10,8 @@ public class LeverSwitch : MonoBehaviour, IInteractable, IHoldInteractable
     [SerializeField] private float moveSpeed = 120f; // degrees per second
 
     [Header("Events")]
-    [SerializeField] private UnityEvent onHoldStart; // 開始長按（例如 Elevator.MoveDown）
-    [SerializeField] private UnityEvent onHoldEnd;   // 放開（例如 Elevator.StopMove）
+    [SerializeField] private UnityEvent onHoldStart; 
+    [SerializeField] private UnityEvent onHoldEnd;   
 
     private bool isHolding;
 
@@ -31,7 +31,6 @@ public class LeverSwitch : MonoBehaviour, IInteractable, IHoldInteractable
         );
     }
 
-    // 保留一般互動相容性：按一下視為開始長按
     public void Interact()
     {
         BeginHold();
