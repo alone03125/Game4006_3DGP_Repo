@@ -4,42 +4,66 @@ using UnityEngine.InputSystem;
 public class SimpleCameraOrbit : MonoBehaviour
 {
     public Transform target;
-    public Vector3 headOffset = new Vector3(0, 1.5f, 0);
-    public float lookSensitivity = 2f;
+    public Vector3 headOffset = new Vector3(0, 1.2f, 0);
+    public float lookSensitivity = 8f;
 
-    // ¶¶¶¯²ÎÊı
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     public bool enableShake = true;
-    public float horizontalShakeAmplitude = 0.05f;
-    public float verticalShakeAmplitude = 0.025f;
-    public float maxShakeFrequency = 15f;
-    public float shakeSmoothTime = 0.2f;          // ¶¶¶¯Ç¿¶È±ä»¯Æ½»¬Ê±¼ä
+    public float horizontalShakeAmplitude = 0.25f;
+    public float verticalShakeAmplitude = 0.15f;
+    public float maxShakeFrequency = 5f;
+    public float shakeSmoothTime = 0.2f;
 
-    // ÌøÔ¾ÊÓ½ÇÆ«ÒÆ²ÎÊı
+    // ï¿½ï¿½Ô¾ï¿½Ó½ï¿½Æ«ï¿½Æ²ï¿½ï¿½ï¿½
     public bool enableJumpPitch = true;
     public float maxJumpPitchOffset = 15f;
-    public float pitchSmoothTime = 0.1f;
+    public float pitchSmoothTime = 0.2f;
     public float landReboundStrength = 0.5f;
     public float landReboundDuration = 0.2f;
-    public float airTransitionSmoothTime = 0.2f;  // µØÃæ-¿ÕÖĞ¹ı¶ÉÆ½»¬Ê±¼ä£¨ÓÃÓÚ»ìºÏ£©
+    public float airTransitionSmoothTime = 0.1f;
 
-    // ¿ØÖÆ×´Ì¬
+    // ï¿½ï¿½ï¿½ï¿½×´Ì¬
     public bool controlsEnabled = true;
 
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹
+    private bool isCameraLocked = false;
+    private Quaternion lockedRotation;
+    private bool followTargetWhenLocked = true;
+
+    // è‡ªç”±ç¬¬ä¸‰äººç§°æ¨¡å¼ï¼ˆç”¨äºå¾ªè¿¹åˆ†èº«ï¼‰
+    private bool freeLookMode = false;
+    private float freeLookDistance = 5f;
+
+    // è§†è§’åˆ‡æ¢å¹³æ»‘è¿‡æ¸¡
+    [Header("è§†è§’è¿‡æ¸¡")]
+    public float viewTransitionDuration = 0.4f;
+    public AnimationCurve viewTransitionCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 0f, 3f),
+        new Keyframe(1f, 1f, 0f, 0f)
+    );
+    private bool isTransitioning = false;
+    private float transitionTimer = 0f;
+    private float transitionDuration = 0.4f;
+    private Vector3 transitionStartPos;
+    private Quaternion transitionStartRot;
+    private bool transitionToFreeLook = false;
+
+    // ï¿½Ú²ï¿½ï¿½ï¿½ï¿½ï¿½
     private float yaw = 0f;
     private float pitch = 0f;
-    private float pitchOffsetRaw = 0f;      // Ô­Ê¼¸©ÑöÆ«ÒÆ£¨Î´»ìºÏ£©
+    private float pitchOffsetRaw = 0f;
     private float pitchOffsetVelocity = 0f;
     private float landReboundTimer = 0f;
     private float landReboundOffset = 0f;
-
-    private float airTransitionWeight = 0f;   // 0=ÍêÈ«µØÃæ, 1=ÍêÈ«¿ÕÖĞ
+    private float airTransitionWeight = 0f;
     private float airTransitionVelocity = 0f;
 
     private PlayerController playerController;
     private float shakePhase = 0f;
-    private float currentShakeIntensity = 0f; // µ±Ç°¶¶¶¯Ç¿¶È£¨Æ½»¬ºó£©
-
+    private float currentShakeIntensity = 0f;
     private bool wasGrounded = true;
+
+    private Vector3 defaultHeadOffset;
 
     void Start()
     {
@@ -48,6 +72,18 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         playerController = target?.GetComponent<PlayerController>();
         ApplyControlsState();
+
+        defaultHeadOffset = headOffset;
+    }
+
+    public void SetCameraOffset(Vector3 newOffset)
+    {
+        headOffset = newOffset;
+    }
+
+    public void ResetCameraOffset()
+    {
+        headOffset = defaultHeadOffset;
     }
 
     void Update()
@@ -63,8 +99,71 @@ public class SimpleCameraOrbit : MonoBehaviour
     {
         if (target == null) return;
 
-        // Êó±êÊÓ½ÇĞı×ª
-        if (controlsEnabled && Mouse.current != null)
+        // ===== è¿‡æ¸¡åŠ¨ç”» =====
+        if (isTransitioning)
+        {
+            transitionTimer += Time.unscaledDeltaTime;
+            float rawT = Mathf.Clamp01(transitionTimer / transitionDuration);
+            // ä½¿ç”¨Inspectorå¯ç¼–è¾‘çš„åŠ¨ç”»æ›²çº¿
+            float t = viewTransitionCurve.Evaluate(rawT);
+
+            Vector3 targetPos;
+            Quaternion targetRot1;
+
+            if (transitionToFreeLook)
+            {
+                // è®¡ç®—ç›®æ ‡ç¬¬ä¸‰äººç§°ä½ç½®
+                Quaternion rotation = Quaternion.Euler(pitch, yaw, 0);
+                Vector3 offset = rotation * new Vector3(0, 0, -freeLookDistance);
+                targetPos = target.position + Vector3.up * 1.5f + offset;
+                targetRot1 = Quaternion.LookRotation((target.position + Vector3.up * 1.5f) - targetPos);
+            }
+            else
+            {
+                // è®¡ç®—ç›®æ ‡ç¬¬ä¸€äººç§°ä½ç½®
+                targetPos = target.position + headOffset;
+                targetRot1 = Quaternion.Euler(pitch, yaw, 0);
+            }
+
+            transform.position = Vector3.Lerp(transitionStartPos, targetPos, t);
+            transform.rotation = Quaternion.Slerp(transitionStartRot, targetRot1, t);
+
+            // è¿‡æ¸¡æœŸé—´ä»å…è®¸é¼ æ ‡è¾“å…¥
+            if (controlsEnabled && Mouse.current != null)
+            {
+                Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
+                yaw += delta.x;
+                pitch -= delta.y;
+                pitch = Mathf.Clamp(pitch, transitionToFreeLook ? -30f : -80f, 80f);
+            }
+
+            if (rawT >= 1f)
+            {
+                isTransitioning = false;
+            }
+            return;
+        }
+
+        // ===== è‡ªç”±ç¬¬ä¸‰äººç§°æ¨¡å¼ï¼ˆç”¨äºå¾ªè¿¹åˆ†èº«ï¼‰ =====
+        if (freeLookMode)
+        {
+            if (controlsEnabled && Mouse.current != null)
+            {
+                Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
+                yaw += delta.x;
+                pitch -= delta.y;
+                pitch = Mathf.Clamp(pitch, -30f, 80f);
+            }
+
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0);
+            Vector3 offset = rotation * new Vector3(0, 0, -freeLookDistance);
+            transform.position = target.position + Vector3.up * 1.5f + offset;
+            transform.LookAt(target.position + Vector3.up * 1.5f);
+            return;
+        }
+
+        // ===== Ô­ï¿½Ğ¸ï¿½ï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½Ó½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ =====
+        if (controlsEnabled && Mouse.current != null && !isCameraLocked)
         {
             Vector2 delta = Mouse.current.delta.ReadValue() * lookSensitivity * 0.01f;
             yaw += delta.x;
@@ -74,21 +173,20 @@ public class SimpleCameraOrbit : MonoBehaviour
 
         bool isGrounded = playerController != null && playerController.Controller.isGrounded;
 
-        // ¸üĞÂ¹ı¶ÉÈ¨ÖØ£¨ÓÃÓÚ¸©ÑöÆ«ÒÆ»ìºÏ£©
+        // ï¿½ï¿½ï¿½Â¹ï¿½ï¿½ï¿½È¨ï¿½ï¿½
         float targetWeight = isGrounded ? 0f : 1f;
         airTransitionWeight = Mathf.SmoothDamp(airTransitionWeight, targetWeight, ref airTransitionVelocity, airTransitionSmoothTime);
 
-        // 1. ¶¶¶¯Ç¿¶ÈÆ½»¬£¨ÎŞÂÛÊÇ·ñ½ÓµØ£¬Ä¿±êÖµ»á±ä»¯£¬µ«Æ½»¬¹ı¶É£©
+        // ï¿½ï¿½ï¿½ï¿½Ç¿ï¿½ï¿½
         if (enableShake && playerController != null)
         {
             float targetIntensity = 0f;
-            if (isGrounded)  // ½ÓµØÊ±¸ù¾İËÙ¶È¼ÆËãÄ¿±êÇ¿¶È
+            if (isGrounded)
             {
                 float speed = playerController.GetCurrentHorizontalSpeed();
                 float maxSpeed = playerController.CurrentMaxSpeed;
                 targetIntensity = Mathf.Clamp01(speed / maxSpeed);
             }
-            // ¿ÕÖĞÊ±Ä¿±êÇ¿¶ÈÎª0£¬×ÔÈ»Ë¥¼õ
             currentShakeIntensity = Mathf.Lerp(currentShakeIntensity, targetIntensity, Time.deltaTime / shakeSmoothTime);
         }
         else
@@ -96,14 +194,13 @@ public class SimpleCameraOrbit : MonoBehaviour
             currentShakeIntensity = 0f;
         }
 
-        // 2. ¼ÆËã¶¶¶¯Æ«ÒÆ£¨»ùÓÚÆ½»¬ºóµÄÇ¿¶È£©
+        // ï¿½ï¿½ï¿½ï¿½Æ«ï¿½ï¿½
         Vector3 shakeOffset = Vector3.zero;
         if (controlsEnabled && currentShakeIntensity > 0.01f)
         {
             float freq = Mathf.Lerp(0.5f, maxShakeFrequency, currentShakeIntensity);
             float hAmp = horizontalShakeAmplitude * currentShakeIntensity;
             float vAmp = verticalShakeAmplitude * currentShakeIntensity;
-
             shakePhase += Time.deltaTime * freq;
             float xShake = Mathf.Sin(shakePhase) * hAmp;
             float yShake = Mathf.Sin(shakePhase * 2f) * vAmp;
@@ -114,17 +211,26 @@ public class SimpleCameraOrbit : MonoBehaviour
             shakePhase = 0f;
         }
 
-        // 3. Ô­Ê¼¸©ÑöÆ«ÒÆ£¨¸ù¾İ´¹Ö±ËÙ¶È£¬½öÔÚ¿ÕÖĞ¼ÆËãÄ¿±êÖµ£¬µ«Æ½»¬¹ı¶É£©
+        // ï¿½ï¿½ï¿½ï¿½Æ«ï¿½ï¿½
         UpdatePitchOffsetRaw(isGrounded);
-
-        // 4. ×îÖÕ¸©ÑöÆ«ÒÆ = Ô­Ê¼Æ«ÒÆ * ¹ı¶ÉÈ¨ÖØ£¨µØÃæÊ±È¨ÖØÎª0£¬¿ÕÖĞÖğ½¥±äÎª1£©
         float finalPitchOffset = pitchOffsetRaw * airTransitionWeight;
 
-        // 5. ×îÖÕĞı×ªºÍÎ»ÖÃ
-        transform.rotation = Quaternion.Euler(pitch + finalPitchOffset + landReboundOffset, yaw, 0);
-        transform.position = target.position + headOffset + shakeOffset;
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×ª
+        Quaternion targetRot;
+        if (isCameraLocked)
+            targetRot = lockedRotation;
+        else
+            targetRot = Quaternion.Euler(pitch + finalPitchOffset + landReboundOffset, yaw, 0);
 
-        // 6. ÂäµØ»Øµ¯Âß¼­£¨¶ÀÁ¢£©
+        transform.rotation = targetRot;
+
+        // Î»ï¿½ï¿½
+        if (isCameraLocked && followTargetWhenLocked && target != null)
+            transform.position = target.position + headOffset + shakeOffset;
+        else if (!isCameraLocked)
+            transform.position = target.position + headOffset + shakeOffset;
+
+        // ï¿½ï¿½Ø»Øµï¿½ï¿½ß¼ï¿½
         if (!wasGrounded && isGrounded)
         {
             float verticalSpeed = playerController?.GetCurrentVerticalSpeed() ?? 0f;
@@ -142,13 +248,9 @@ public class SimpleCameraOrbit : MonoBehaviour
         {
             landReboundTimer -= Time.deltaTime;
             if (landReboundTimer <= 0f)
-            {
                 landReboundOffset = 0f;
-            }
             else
-            {
                 landReboundOffset = Mathf.Lerp(0f, landReboundOffset, landReboundTimer / landReboundDuration);
-            }
         }
     }
 
@@ -161,8 +263,6 @@ public class SimpleCameraOrbit : MonoBehaviour
         }
 
         float verticalSpeed = playerController.GetCurrentVerticalSpeed();
-
-        // Ä¿±êÆ«ÒÆ£º¿ÕÖĞ¸ù¾İËÙ¶È£¬µØÃæÎª0
         float targetOffset = 0f;
         if (!isGrounded)
         {
@@ -172,8 +272,6 @@ public class SimpleCameraOrbit : MonoBehaviour
             else if (verticalSpeed < 0f)
                 targetOffset = maxJumpPitchOffset * speedRatio;
         }
-
-        // Æ½»¬¹ı¶É£¨µØÃæÊ±Ò²»áÆ½»¬¹éÁã£¬±ÜÃâÍ»±ä£©
         pitchOffsetRaw = Mathf.SmoothDamp(pitchOffsetRaw, targetOffset, ref pitchOffsetVelocity, pitchSmoothTime);
     }
 
@@ -199,4 +297,58 @@ public class SimpleCameraOrbit : MonoBehaviour
         controlsEnabled = hasFocus;
         ApplyControlsState();
     }
+
+    // ========== ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ==========
+    public void SetCameraLock(bool locked, Quaternion fixedRotation, bool followTarget = true)
+    {
+        isCameraLocked = locked;
+        if (locked)
+        {
+            lockedRotation = fixedRotation;
+            followTargetWhenLocked = followTarget;
+        }
+    }
+
+    public void SetControlsEnabled(bool enabled)
+    {
+        controlsEnabled = enabled;
+        ApplyControlsState();
+    }
+
+    /// <summary>
+    /// ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éµï¿½ï¿½ï¿½ï¿½Ë³ï¿½Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    /// </summary>
+    public void SetFreeLookMode(bool enabled, float distance = 5f)
+    {
+        bool wasFreeLook = freeLookMode;
+        freeLookMode = enabled;
+        freeLookDistance = distance;
+
+        // å¯åŠ¨è¿‡æ¸¡åŠ¨ç”»
+        if (wasFreeLook != enabled)
+        {
+            isTransitioning = true;
+            transitionTimer = 0f;
+            transitionDuration = viewTransitionDuration;
+            transitionStartPos = transform.position;
+            transitionStartRot = transform.rotation;
+            transitionToFreeLook = enabled;
+        }
+
+        if (enabled)
+        {
+            controlsEnabled = true;
+            isCameraLocked = false;
+            ApplyControlsState();
+        }
+    }
+
+    public void SetYawPitch(float newYaw, float newPitch)
+    {
+        yaw = newYaw;
+        pitch = Mathf.Clamp(newPitch, -80f, 80f);
+    }
+
+    public float GetPitch() => pitch;
+    public float GetYaw() => yaw;
 }

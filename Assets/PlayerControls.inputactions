@@ -24,9 +24,18 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Press",
+                    "name": "Activate",
                     "type": "Button",
-                    "id": "6d3bf4d9-54f4-44ec-b889-617def6d5975",
+                    "id": "c9d65670-08b8-4ed1-980f-249517845fc2",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "TraceActivate",
+                    "type": "Button",
+                    "id": "f1a2b3c4-d5e6-47f8-90ab-cdef12345678",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -102,12 +111,23 @@
                 },
                 {
                     "name": "",
-                    "id": "cbc54752-84c3-42c1-b8c0-8f954e8a4b04",
+                    "id": "0d7be2c0-1bf5-4a9f-a675-999de1bf72a7",
                     "path": "<Keyboard>/q",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Press",
+                    "action": "Activate",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "a1b2c3d4-e5f6-47a8-90bc-def123456789",
+                    "path": "<Keyboard>/e",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "TraceActivate",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
