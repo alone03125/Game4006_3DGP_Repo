@@ -30,6 +30,9 @@ public class PressurePlate : MonoBehaviour
 
     private static bool IsValidActor(Collider other)
     {
-        return other.GetComponent<PlayerInteraction>() != null;
+        var actor = other.GetComponentInParent<InteractionActor>();
+        if (actor == null || !actor.CanAffectWorldMechanisms) return false;
+
+        return other.GetComponentInParent<PlayerInteraction>() != null;
     }
 }

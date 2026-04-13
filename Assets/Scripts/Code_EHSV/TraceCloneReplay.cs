@@ -14,8 +14,13 @@ public class TraceCloneReplay : MonoBehaviour
     private bool finished;
     private bool initialized;
     private int postFinishTicks;
+    private PlayerInteraction interaction; //B
 
-    public void Initialize(List<TraceCloneManager.TickRecord> records, PlayerController controller)
+    // public void Initialize(List<TraceCloneManager.TickRecord> records, PlayerController controller)
+    public void Initialize(
+    List<TraceCloneManager.TickRecord> records,
+    PlayerController controller,
+    PlayerInteraction interaction) //B
     {
         this.records = records;
         this.controller = controller;
@@ -23,6 +28,7 @@ public class TraceCloneReplay : MonoBehaviour
         finished = false;
         initialized = false;
         postFinishTicks = 0;
+        this.interaction = interaction; //B
     }
 
     void Start()
@@ -47,6 +53,15 @@ public class TraceCloneReplay : MonoBehaviour
             controller.SetExternalInput(rec.moveInput, false, rec.sprint);
             controller.overrideCameraYaw = rec.cameraYaw;
 
+            if (interaction != null) //B
+            {
+                if (rec.activatePressed) //B
+                    interaction.RequestInteract(); //B
+
+                if (rec.activateReleased) //B
+                    interaction.RequestReleaseInteract(); //B
+            }
+
             if (rec.jumpTrigger)
                 controller.TriggerJumpBuffer();
 
@@ -56,6 +71,9 @@ public class TraceCloneReplay : MonoBehaviour
         {
             // 所有Tick已消费，等待落地后销毁
             controller.SetExternalInput(Vector2.zero, false, false);
+
+            if (interaction != null) //B
+                interaction.RequestReleaseInteract(); //B
 
             if (!controller.IsAirborne)
             {

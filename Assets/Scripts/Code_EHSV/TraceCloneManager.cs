@@ -21,6 +21,9 @@ public class TraceCloneManager : MonoBehaviour
         public bool jumpTrigger;   // 该Tick是否有新的跳跃按下
         public bool sprint;
         public float cameraYaw;
+
+        public bool activatePressed; //錄製場景互動按鍵
+        public bool activateReleased;
     }
 
     // 状态
@@ -32,6 +35,10 @@ public class TraceCloneManager : MonoBehaviour
     private PlayerController playerController;
     private SimpleCameraOrbit cameraOrbit;
     private GameObject player;
+
+    //紀錄玩家互動狀態
+    private PlayerInteraction phantomInteraction; //B
+    private InteractionActor phantomActor; //B
 
     // 保存摄像机原始状态
     private Transform originalCameraTarget;
@@ -81,7 +88,10 @@ public class TraceCloneManager : MonoBehaviour
             moveInput = phantomController.GetRawMoveInput(),
             jumpTrigger = phantomController.ConsumeJumpTrigger(),
             sprint = phantomController.IsSprinting,
-            cameraYaw = Camera.main.transform.eulerAngles.y
+            cameraYaw = Camera.main.transform.eulerAngles.y,
+            
+            activatePressed = phantomInteraction != null && phantomInteraction.ConsumeActivatePressed(), //B
+            activateReleased = phantomInteraction != null && phantomInteraction.ConsumeActivateReleased() //B
         });
     }
 
@@ -128,6 +138,10 @@ public class TraceCloneManager : MonoBehaviour
         phantomController.useFixedUpdateMode = true;  // FixedUpdate驱动，与回放一致
         phantomController.enabled = true;
 
+
+        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>(); //B
+        if (phantomInteraction == null) Debug.LogError("[TraceClone] PlayerInteraction not found");//B
+
         var phantomCam = currentPhantom.GetComponentInChildren<Camera>();
         if (phantomCam != null) phantomCam.enabled = false;
 
@@ -149,6 +163,16 @@ public class TraceCloneManager : MonoBehaviour
         EnablePlayerInput(currentPhantom, true);
 
         Debug.Log("[TraceClone] Tick-based recording started");
+
+
+        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>(); //B
+        phantomActor = currentPhantom.GetComponent<InteractionActor>(); //B
+
+        if (phantomInteraction != null)
+            phantomInteraction.SetExecuteInteractImmediately(false); //B 錄製時只記錄，不觸發 
+
+        if (phantomActor != null)
+            phantomActor.SetCanAffectWorldMechanisms(false); // B 錄製時不觸發 Trigger 類機關
     }
 
     private void ExitTracePhantomAndSpawnClone()
@@ -172,6 +196,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
+        phantomInteraction = null; //B
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -204,6 +229,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
+        phantomInteraction = null; //B
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -246,8 +272,23 @@ public class TraceCloneManager : MonoBehaviour
         traceController.freezeGravity = false;
         traceController.useFixedUpdateMode = true;
 
-        var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
-        replay.Initialize(ticks, traceController);
+        // var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
+        // replay.Initialize(ticks, traceController);
+
+        var traceInteraction = currentTraceClone.GetComponent<PlayerInteraction>(); //B
+        if (traceInteraction == null) //B
+        Debug.LogError("[TraceClone] PlayerInteraction not found"); //B
+
+        var replay = currentTraceClone.AddComponent<TraceCloneReplay>(); //B
+        replay.Initialize(ticks, traceController, traceInteraction); //B
+
+        if (traceInteraction != null)
+        traceInteraction.SetExecuteInteractImmediately(true);//B
+
+        var traceActor = currentTraceClone.GetComponent<InteractionActor>();//B
+        if (traceActor != null) //B
+            traceActor.SetCanAffectWorldMechanisms(true); //B
+
 
         Debug.Log($"[TraceClone] Trace clone spawned, {ticks.Count} ticks to replay");
     }
@@ -281,6 +322,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
+        phantomInteraction = null; //B
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -310,6 +352,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
+        phantomInteraction = null;//B
 
         isPhantomActive = false;
         isTimeStopped = false;

@@ -4,21 +4,12 @@ using UnityEngine;
 
 public class Lazer : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    private void OnTriggerEnter(Collider other)
     {
-        
-    }
+        var actor = other.GetComponentInParent<InteractionActor>();
+        if (actor == null || !actor.CanAffectWorldMechanisms) return;
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
-        private void OnTriggerEnter(Collider other)
-    {
-       if (other.GetComponent<PlayerInteraction>() != null)
+        if (other.GetComponentInParent<PlayerInteraction>() != null)
         {
             Debug.Log("Lazer hit player");
         }
