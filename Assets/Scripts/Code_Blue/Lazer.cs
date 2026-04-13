@@ -11,40 +11,44 @@ public class Lazer : MonoBehaviour
     private float _nextHitTime;
     private TraceCloneManager _traceMgr;
     private CloneManager _cloneMgr;
+    private LazerFreeze _freeze;
 
     private void Awake()
     {
         _traceMgr = FindAnyObjectByType<TraceCloneManager>();
         _cloneMgr = FindAnyObjectByType<CloneManager>();
-            }
+        _freeze = GetComponentInParent<LazerFreeze>();
+    }
 
     private void OnTriggerEnter(Collider other)
     {
+        if (_freeze != null && _freeze.IsFrozen)
+            return;
+
         if (Time.time < _nextHitTime) return;
         _nextHitTime = Time.time + hitCooldown;
 
         Transform root = other.transform.root;
         if (root == null) return;
 
-        // 1) TracePhantom: Discard recording
+        //Delete TracePhantom
         if (root.CompareTag("TracePhantom"))
         {
             if (_traceMgr != null) _traceMgr.ForceExitClean();
-            else Destroy(root.gameObject); // 保底
+            else Destroy(root.gameObject);
             Debug.Log("Lazer hit TracePhantom -> discard recording");
             return;
         }
-
-        // 2) Stop Time VisionClone
+        //Stop Time VisionClone
         if (root.CompareTag("VisionClone"))
         {
             if (_cloneMgr != null) _cloneMgr.ForceExitTimeStop(false);
-            else Destroy(root.gameObject); // 保底
+            else Destroy(root.gameObject);
             Debug.Log("Lazer hit VisionClone -> removed");
             return;
         }
 
-        // 3) Delete TraceClone
+        //Delete TraceClone
         if (root.CompareTag("TraceClone"))
         {
             Destroy(root.gameObject);
@@ -52,13 +56,14 @@ public class Lazer : MonoBehaviour
             return;
         }
 
-        // 4) Teleport Player to Respawn Point
+        // Teleport Player to Respawn Point
         if (root.CompareTag("Player"))
         {
             TeleportToRespawn(root);
             Debug.Log("Lazer hit Player -> respawn");
         }
     }
+
 
     private void TeleportToRespawn(Transform targetRoot)
     {
