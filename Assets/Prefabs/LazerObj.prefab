@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8568396024408648686}
   - component: {fileID: 4893509997496447769}
+  - component: {fileID: 2684486344632921547}
   m_Layer: 0
   m_Name: LAZER
   m_TagString: Untagged
@@ -139,6 +140,23 @@ LineRenderer:
   m_UseWorldSpace: 0
   m_Loop: 0
   m_ApplyActiveColorSpace: 1
+--- !u!114 &2684486344632921547
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488223086917977306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba3297e05f510e64da0b96f621769b5f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  line: {fileID: 4893509997496447769}
+  colliderPivot: {fileID: 5573240936401584723}
+  box: {fileID: 3750017794515796696}
+  thickness: 0.2
+  updateEveryFrame: 1
 --- !u!1 &2533525895824427038
 GameObject:
   m_ObjectHideFlags: 0
@@ -277,9 +295,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5744592723236636391}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.4521479, y: -0, z: -0, w: 0.891943}
-  m_LocalPosition: {x: 0, y: -0.39482, z: -0.34792}
-  m_LocalScale: {x: 0.11581, y: 0.43203, z: 0.8166216}
+  m_LocalRotation: {x: -0, y: 0.894532, z: -0.447004, w: 0}
+  m_LocalPosition: {x: 0, y: -1.1000342, z: -0.7015356}
+  m_LocalScale: {x: 0.11581, y: 0.43203, z: 1.0006881}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8568396024408648686}
@@ -315,8 +333,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1, y: 0.32170916, z: 2.8988197}
-  m_Center: {x: 0, y: -0.33176923, z: -0.9494101}
+  m_Size: {x: 0.2, y: 0.2, z: 2.3369913}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!54 &1640205280228713705
 Rigidbody:
   m_ObjectHideFlags: 0

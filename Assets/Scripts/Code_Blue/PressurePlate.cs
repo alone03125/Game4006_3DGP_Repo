@@ -14,15 +14,19 @@ public class PressurePlate : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // Debug.Log("PressurePlate Enter");
-        // Debug.Log("Overlap: " + overlapCount);
-        // Debug.Log("IsValidActor: " + IsValidActor(other));
-        // Debug.Log("PlayerInteraction: " + other.GetComponentInParent<PlayerInteraction>());
-        // Debug.Log("InteractionActor: " + other.GetComponentInParent<InteractionActor>());
-        // Debug.Log("--------------------------------");
-
-        if (!IsValidActor(other)) return;
-        if (!activeColliders.Add(other)) return;
+        Debug.Log($"[Plate] Enter: {other.name}, root={other.transform.root.name}");
+        
+        bool valid = IsValidActor(other);
+        
+        Debug.Log($"[Plate] IsValidActor={valid}");
+        if (!valid) return;
+        if (!activeColliders.Add(other))
+        {
+            Debug.Log("[Plate] Collider already tracked.");
+            return;
+        }
+        
+        Debug.Log($"[Plate] Added collider. Count={activeColliders.Count}");
         RefreshState();
        
     }
@@ -44,20 +48,30 @@ public class PressurePlate : MonoBehaviour
             RefreshState();
     }
 
-    private void RefreshState()
+   private void RefreshState()
     {
         bool nowPressed = activeColliders.Count > 0;
+        Debug.Log($"[Plate] RefreshState nowPressed={nowPressed}, isPressed={isPressed}, count={activeColliders.Count}");
         if (nowPressed == isPressed) return;
         isPressed = nowPressed;
-        if (isPressed) onPressed?.Invoke();
-        else onReleased?.Invoke();
+        if (isPressed)
+        {
+            Debug.Log("[Plate] Invoke onPressed");
+            onPressed?.Invoke();
+        }
+        else
+        {
+            Debug.Log("[Plate] Invoke onReleased");
+            onReleased?.Invoke();
+        }
     }
 
     private static bool IsValidActor(Collider other)
     {
         var actor = other.GetComponentInParent<InteractionActor>();
+        var player = other.GetComponentInParent<PlayerInteraction>();
+        Debug.Log($"[Plate] actor={(actor != null)}, canAffect={(actor != null && actor.CanAffectWorldMechanisms)}, player={(player != null)}");
         if (actor == null || !actor.CanAffectWorldMechanisms) return false;
-
-        return other.GetComponentInParent<PlayerInteraction>() != null;
+        return player != null;
     }
 }
