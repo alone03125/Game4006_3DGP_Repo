@@ -2,33 +2,37 @@ using UnityEngine;
 
 public class PuzzleDoor : MonoBehaviour
 {
-    [SerializeField] private float openAngle = 90f;
-    [SerializeField] private float openSpeed = 120f; // degrees/sec
+    [SerializeField] private float dropDistance = 3f;   // 向下移動幾公尺
+    [SerializeField] private float dropSpeed = 2f;      // 每秒移動速度
+    [SerializeField] private bool disableAfterDrop = true;
 
     private bool opening = false;
-    private Quaternion targetRotation;
+    private Vector3 targetPosition;
 
     public void OpenDoor()
     {
         if (opening) return;
         opening = true;
-        targetRotation = transform.rotation * Quaternion.Euler(0f, openAngle, 0f);
+        targetPosition = transform.position + Vector3.down * dropDistance;
     }
 
     private void Update()
     {
         if (!opening) return;
 
-        transform.rotation = Quaternion.RotateTowards(
-            transform.rotation,
-            targetRotation,
-            openSpeed * Time.deltaTime
+        transform.position = Vector3.MoveTowards(
+            transform.position,
+            targetPosition,
+            dropSpeed * Time.deltaTime
         );
 
-        if (Quaternion.Angle(transform.rotation, targetRotation) < 0.1f)
+        if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
         {
-            transform.rotation = targetRotation;
+            transform.position = targetPosition;
             opening = false;
+
+            if (disableAfterDrop)
+                gameObject.SetActive(false); // 或改成 Destroy(gameObject);
         }
     }
 }
