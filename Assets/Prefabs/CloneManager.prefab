@@ -49,15 +49,15 @@ MonoBehaviour:
   playerPrefab: {fileID: 0}
   visionCloneMaterial: {fileID: 2100000, guid: 02816cefa349a2544986be9ec62e9b3b, type: 2}
   solidCloneMaterial: {fileID: 2100000, guid: e051a88f4dd34214391eacf259b34f07, type: 2}
-  triangleUIPrefab: {fileID: 2771020773163849207, guid: 51d33ea36e383e4428a5266cc55f5e58,
-    type: 3}
-  selectedColor: {r: 0, g: 1, b: 0, a: 1}
+  triangleUIPrefab: {fileID: 0}
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  swapVFXPrefab: {fileID: 0}
+  solidCloneVFXPrefab: {fileID: 0}
   separationDistance: 1
   proximityRadius: 2.5
   occlusionMask:
     serializedVersion: 2
-    m_Bits: 64
+    m_Bits: 4294967295
 --- !u!114 &9014755463341818459
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -73,7 +73,6 @@ MonoBehaviour:
   playerPrefab: {fileID: 0}
   phantomMaterial: {fileID: 2100000, guid: 7be7f1e6ca45e6a45a515e8c9eee284e, type: 2}
   traceCloneMaterial: {fileID: 2100000, guid: 2ee868505006fb047a8fba6cd1ea7d14, type: 2}
-  snapshotInterval: 0.1
 --- !u!114 &7318817174579022191
 MonoBehaviour:
   m_ObjectHideFlags: 0

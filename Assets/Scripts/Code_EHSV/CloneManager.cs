@@ -1,7 +1,7 @@
-using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using TMPro;
+using System.Collections.Generic;
 
 public class CloneManager : MonoBehaviour
 {
@@ -15,16 +15,16 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("VFX")]
-    public GameObject swapVFXPrefab;
-    public GameObject solidCloneVFXPrefab;
+    public GameObject swapVFXPrefab;              // 传送特效（自动销毁，跟随摄像机）
+    public GameObject solidCloneVFXPrefab;        // 固化实体标记特效（跟随实体）
 
     [Header("Detection")]
     public float separationDistance = 0.1f;
     public float proximityRadius = 2.5f;
     public LayerMask occlusionMask = -1;
+    public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
 
-    [Header("Transparent Layer")]
-    public LayerMask transparentLayer; // 分身可穿越的层，且不阻挡视线
+    private const float SWAP_VFX_DURATION = 2.5f; // 传送特效持续时间
 
     // 状态
     private bool isTimeStopped = false;
@@ -75,11 +75,12 @@ public class CloneManager : MonoBehaviour
     {
         if (!isTimeStopped)
         {
+            // 非时停下，检测固化实体是否应消失
             if (currentSolidClone != null)
             {
                 if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
                 {
-                    Debug.Log("固化实体离开视野或被遮挡，销毁");
+                    Debug.Log("固化实体离开视野或被完全遮挡，销毁");
                     Destroy(currentSolidClone);
                     currentSolidClone = null;
                 }
@@ -87,12 +88,14 @@ public class CloneManager : MonoBehaviour
             return;
         }
 
+        // 时停期间相机锁定
         if (cameraLocked && player != null)
         {
             Camera.main.transform.position = player.transform.position + cameraOrbit.headOffset;
             Camera.main.transform.rotation = lockedCameraRotation;
         }
 
+        // 视界分身的视野/遮挡检测（生成保护期内跳过）
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
             float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
@@ -100,7 +103,7 @@ public class CloneManager : MonoBehaviour
 
             if (!isInProximity && (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone)))
             {
-                Debug.Log($"分身距离本体 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被遮挡，强制退出时停");
+                Debug.Log($"分身距离本体 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被完全遮挡，强制退出时停");
                 ExitTimeStop(false, swapOnExit: false);
             }
         }
@@ -131,10 +134,12 @@ public class CloneManager : MonoBehaviour
     {
         if (isTimeStopped && isCloneActive)
         {
+            // 时停内按下Tab：传送本体并固化原位置，然后退出时停
             ExitTimeStop(true, swapOnExit: true);
         }
         else if (!isTimeStopped && currentSolidClone != null)
         {
+            // 非时停下与固化实体交换位置
             SwapWithSolidClone();
         }
     }
@@ -207,10 +212,11 @@ public class CloneManager : MonoBehaviour
 
         currentClone.GetComponent<CharacterController>().enabled = true;
 
+        // 忽略与玩家的碰撞
         IgnoreCollisionBetween(player, currentClone, true);
 
-        // 忽略分身与透明层物体的碰撞
-        IgnoreCollisionWithLayer(currentClone, transparentLayer, true);
+        // 忽略与透明层物体的碰撞
+        IgnoreCollisionWithTransparentLayers(currentClone, true);
 
         hasSeparated = false;
 
@@ -265,8 +271,8 @@ public class CloneManager : MonoBehaviour
 
                     CreateSolidClone(originalPos, originalRot);
 
-                    if (swapVFXPrefab != null)
-                        Instantiate(swapVFXPrefab, player.transform.position, Quaternion.identity);
+                    // 传送特效：生成在摄像机前并跟随摄像机
+                    SpawnSwapVFX();
 
                     Debug.Log($"传送本体至 {currentClone.transform.position}，原位置固化");
                 }
@@ -336,8 +342,21 @@ public class CloneManager : MonoBehaviour
         float currentPitch = cameraOrbit.GetPitch();
         cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
-        if (swapVFXPrefab != null)
-            Instantiate(swapVFXPrefab, player.transform.position, Quaternion.identity);
+        // 传送特效
+        SpawnSwapVFX();
+    }
+
+    private void SpawnSwapVFX()
+    {
+        if (swapVFXPrefab == null) return;
+
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        GameObject vfx = Instantiate(swapVFXPrefab, cam.transform);
+        vfx.transform.localPosition = new Vector3(0, 0, 1.5f); // 摄像机前方1.5单位
+        vfx.transform.localRotation = Quaternion.identity;
+        Destroy(vfx, SWAP_VFX_DURATION);
     }
 
     private void CreateSolidClone(Vector3 position, Quaternion rotation)
@@ -358,6 +377,7 @@ public class CloneManager : MonoBehaviour
         if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
         rb.isKinematic = true;
 
+        // 固化实体标记特效（跟随实体）
         if (solidCloneVFXPrefab != null)
         {
             GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
@@ -367,6 +387,7 @@ public class CloneManager : MonoBehaviour
         Debug.Log($"生成固化实体于 {position}");
     }
 
+    // ---------- 视野与遮挡检测 ----------
     private bool IsCloneInSight(GameObject target)
     {
         Camera cam = Camera.main;
@@ -394,41 +415,30 @@ public class CloneManager : MonoBehaviour
         return viewportPos.z > 0 && viewportPos.x >= -0.2f && viewportPos.x <= 1.2f && viewportPos.y >= -0.2f && viewportPos.y <= 1.2f;
     }
 
-    /// <summary>
-    /// 检测目标是否被完全遮挡（即所有关键采样点的射线均被非透明障碍物阻挡）
-    /// </summary>
     private bool IsCloneOccluded(GameObject target)
     {
         Camera cam = Camera.main;
         if (cam == null) return false;
 
-        // 收集采样点：包围盒中心 + 八个角点
-        List<Vector3> samplePoints = new List<Vector3>();
+        List<Vector3> samplePoints = new List<Vector3> { target.transform.position };
 
-        // 中心点
-        samplePoints.Add(target.transform.position);
-
-        // 尝试获取包围盒角点（若目标有 Renderer）
         Renderer rend = target.GetComponentInChildren<Renderer>();
         if (rend != null)
         {
             Bounds bounds = rend.bounds;
             Vector3 center = bounds.center;
-            Vector3 extents = bounds.extents;
-
-            // 八个角点
-            samplePoints.Add(center + new Vector3(extents.x, extents.y, extents.z));
-            samplePoints.Add(center + new Vector3(extents.x, extents.y, -extents.z));
-            samplePoints.Add(center + new Vector3(extents.x, -extents.y, extents.z));
-            samplePoints.Add(center + new Vector3(extents.x, -extents.y, -extents.z));
-            samplePoints.Add(center + new Vector3(-extents.x, extents.y, extents.z));
-            samplePoints.Add(center + new Vector3(-extents.x, extents.y, -extents.z));
-            samplePoints.Add(center + new Vector3(-extents.x, -extents.y, extents.z));
-            samplePoints.Add(center + new Vector3(-extents.x, -extents.y, -extents.z));
+            Vector3 ext = bounds.extents;
+            samplePoints.Add(center + new Vector3(ext.x, ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, -ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, -ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, -ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, -ext.y, -ext.z));
         }
         else
         {
-            // 若无渲染器，简单添加目标位置周围几个点
             samplePoints.Add(target.transform.position + Vector3.up * 0.5f);
             samplePoints.Add(target.transform.position + Vector3.down * 0.5f);
             samplePoints.Add(target.transform.position + Vector3.left * 0.5f);
@@ -437,49 +447,55 @@ public class CloneManager : MonoBehaviour
             samplePoints.Add(target.transform.position + Vector3.back * 0.5f);
         }
 
-        // 检查每个采样点：只要有一个点未被阻挡，就认为未完全遮挡
         foreach (Vector3 point in samplePoints)
         {
             Vector3 dir = point - cam.transform.position;
             float distance = dir.magnitude;
-            if (distance < 0.2f) continue; // 太近忽略
+            if (distance < 0.2f) continue;
 
             if (!Physics.Raycast(cam.transform.position, dir, out RaycastHit hit, distance, occlusionMask))
-            {
-                // 没有击中任何东西 -> 可见
                 return false;
-            }
-            else
-            {
-                // 击中了物体，检查是否属于豁免对象
-                if (!IsHitConsideredOcclusion(hit, target))
-                    return false; // 击中的是玩家/分身/透明层，视为未遮挡
-            }
+
+            if (!IsHitConsideredOcclusion(hit, target))
+                return false;
         }
 
-        // 所有采样点都被阻挡
         return true;
     }
 
-    /// <summary>
-    /// 判断射线击中的物体是否应被视为遮挡（非豁免对象）
-    /// </summary>
     private bool IsHitConsideredOcclusion(RaycastHit hit, GameObject target)
     {
         Transform hitRoot = hit.transform.root;
-        // 玩家本体不阻挡
-        if (hitRoot == player.transform) return false;
-        // 分身自身不阻挡
-        if (hitRoot == target.transform) return false;
-        // 透明层物体不阻挡
-        if (hit.transform.gameObject.layer == LayerMask.NameToLayer("Transparent")) return false;
+        if (hitRoot == player.transform || hitRoot == target.transform)
+            return false;
 
-        return true; // 其他物体视为遮挡
+        // 使用配置的透明层判断
+        if (((1 << hit.transform.gameObject.layer) & transparentLayers) != 0)
+            return false;
+
+        return true;
+    }
+
+    private void IgnoreCollisionWithTransparentLayers(GameObject obj, bool ignore)
+    {
+        if (transparentLayers == 0) return;
+
+        // 获取所有透明层上的碰撞体
+        // 注意：此方法在运行时查找场景中所有游戏对象，若透明物体较多可优化为通过物理设置 IgnoreLayerCollision
+        GameObject[] allObjects = FindObjectsOfType<GameObject>();
+        foreach (GameObject other in allObjects)
+        {
+            if (((1 << other.layer) & transparentLayers) != 0)
+            {
+                IgnoreCollisionBetween(obj, other, ignore);
+            }
+        }
     }
 
     private bool IsCloneInSight() => currentClone != null && IsCloneInSight(currentClone);
     private bool IsCloneOccluded() => currentClone != null && IsCloneOccluded(currentClone);
 
+    // ---------- 辅助方法 ----------
     private void ReplaceMaterials(GameObject obj, Material newMat)
     {
         var renderers = obj.GetComponentsInChildren<Renderer>();
@@ -494,27 +510,6 @@ public class CloneManager : MonoBehaviour
         foreach (var ca in collidersA)
             foreach (var cb in collidersB)
                 Physics.IgnoreCollision(ca, cb, ignore);
-    }
-
-    private void IgnoreCollisionWithLayer(GameObject obj, LayerMask layerMask, bool ignore)
-    {
-        Collider[] objColliders = obj.GetComponentsInChildren<Collider>();
-        // 查找场景中所有位于指定层的物体
-        var allObjects = FindObjectsOfType<GameObject>();
-        foreach (var other in allObjects)
-        {
-            if ((layerMask.value & (1 << other.layer)) != 0)
-            {
-                Collider[] otherColliders = other.GetComponentsInChildren<Collider>();
-                foreach (var ca in objColliders)
-                {
-                    foreach (var cb in otherColliders)
-                    {
-                        Physics.IgnoreCollision(ca, cb, ignore);
-                    }
-                }
-            }
-        }
     }
 
     private void DisablePlayerInput(GameObject obj, bool disable)
