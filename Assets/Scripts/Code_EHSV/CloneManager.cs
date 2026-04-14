@@ -1,6 +1,7 @@
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using TMPro;
 
 public class CloneManager : MonoBehaviour
 {
@@ -9,17 +10,23 @@ public class CloneManager : MonoBehaviour
     public Material visionCloneMaterial;
     public Material solidCloneMaterial;
 
-    [Header("UI")]
+    [Header("UI (Optional)")]
     public GameObject triangleUIPrefab;
-    public Color selectedColor = Color.green;
     public Color unselectedColor = Color.yellow;
 
+    [Header("VFX")]
+    public GameObject swapVFXPrefab;
+    public GameObject solidCloneVFXPrefab;
+
     [Header("Detection")]
-    public float separationDistance = 0.1f;      // ��ײ�ָ���ֵ
-    public float proximityRadius = 2.5f;          // ��ȫ�뾶�������ڴ˾�������������
+    public float separationDistance = 0.1f;
+    public float proximityRadius = 2.5f;
     public LayerMask occlusionMask = -1;
 
-    // ״̬
+    [Header("Transparent Layer")]
+    public LayerMask transparentLayer; // 分身可穿越的层，且不阻挡视线
+
+    // 状态
     private bool isTimeStopped = false;
     private bool cameraLocked = false;
     private bool isCloneActive = false;
@@ -27,8 +34,6 @@ public class CloneManager : MonoBehaviour
 
     private GameObject currentClone;
     private GameObject currentSolidClone;
-    private GameObject selectedCarrier;
-    private bool isCloneSelected = false;
 
     private GameObject triangleUI;
     private TMP_Text triangleText;
@@ -44,14 +49,13 @@ public class CloneManager : MonoBehaviour
     private InputAction eAction;
     private TraceCloneManager traceCloneManager;
 
-    // �����ڣ���ֹ����˲�䱻�����٣�
     private float spawnProtectionTimer = 0f;
     private const float SPAWN_PROTECTION_DURATION = 0.5f;
 
     private void Awake()
     {
         player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null) Debug.LogError("δ�ҵ�Player��ǩ����Ϸ����");
+        if (player == null) Debug.LogError("未找到Player标签的游戏对象");
         playerController = player.GetComponent<PlayerController>();
         playerCharController = player.GetComponent<CharacterController>();
         cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
@@ -69,32 +73,40 @@ public class CloneManager : MonoBehaviour
 
     private void Update()
     {
-        if (!isTimeStopped) return;
+        if (!isTimeStopped)
+        {
+            if (currentSolidClone != null)
+            {
+                if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
+                {
+                    Debug.Log("固化实体离开视野或被遮挡，销毁");
+                    Destroy(currentSolidClone);
+                    currentSolidClone = null;
+                }
+            }
+            return;
+        }
 
-        // ����������汾��
         if (cameraLocked && player != null)
         {
             Camera.main.transform.position = player.transform.position + cameraOrbit.headOffset;
             Camera.main.transform.rotation = lockedCameraRotation;
         }
 
-        // ��Ұ/�ڵ���⣺���ڱ����ڹ���ִ��
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
             float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
             bool isInProximity = distToPlayer <= proximityRadius;
 
-            if (!isInProximity && (!IsCloneInSight() || IsCloneOccluded()))
+            if (!isInProximity && (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone)))
             {
-                Debug.Log($"�������뱾�� {distToPlayer:F2} > {proximityRadius} �Ҷ�ʧ��Ұ���ڵ���ǿ���˳�ʱͣ");
-                ExitTimeStop(false);
+                Debug.Log($"分身距离本体 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被遮挡，强制退出时停");
+                ExitTimeStop(false, swapOnExit: false);
             }
         }
         else if (spawnProtectionTimer > 0f)
         {
             spawnProtectionTimer -= Time.deltaTime;
-            if (spawnProtectionTimer <= 0f)
-                Debug.Log("���������ڽ�������ʼ�����Ұ/�ڵ�����ȫ�뾶�ڳ��⣩");
         }
     }
 
@@ -102,7 +114,6 @@ public class CloneManager : MonoBehaviour
     {
         if (!isTimeStopped)
         {
-            // If trace phantom is active, switch from trace to vision
             if (traceCloneManager != null && traceCloneManager.IsPhantomActive())
             {
                 traceCloneManager.HandleQDuringPhantom();
@@ -112,14 +123,20 @@ public class CloneManager : MonoBehaviour
         }
         else
         {
-            ExitTimeStop(true);
+            ExitTimeStop(true, swapOnExit: false);
         }
     }
 
     private void OnTabPerformed(InputAction.CallbackContext ctx)
     {
         if (isTimeStopped && isCloneActive)
-            ToggleCarrierSelection();
+        {
+            ExitTimeStop(true, swapOnExit: true);
+        }
+        else if (!isTimeStopped && currentSolidClone != null)
+        {
+            SwapWithSolidClone();
+        }
     }
 
     private void OnEPerformed(InputAction.CallbackContext ctx)
@@ -132,9 +149,8 @@ public class CloneManager : MonoBehaviour
     {
         if (!isTimeStopped || !isCloneActive) return;
 
-        Debug.Log(">>> [CloneManager] Switching from vision clone to trace phantom");
+        Debug.Log(">>> [CloneManager] 从视界分身切换到循迹幻影");
 
-        // Exit vision clone without solid generation or trace clone handling
         cameraLocked = false;
         cameraOrbit.SetCameraLock(false, Quaternion.identity);
 
@@ -149,10 +165,8 @@ public class CloneManager : MonoBehaviour
         isCloneActive = false;
         isTimeStopped = false;
         hasSeparated = false;
-        selectedCarrier = null;
         spawnProtectionTimer = 0f;
 
-        // Activate trace phantom (trace clone remains paused from vision activation)
         if (traceCloneManager != null)
             traceCloneManager.ActivateTracePhantom();
     }
@@ -163,11 +177,10 @@ public class CloneManager : MonoBehaviour
 
         if (currentSolidClone != null) Destroy(currentSolidClone);
 
-        // Pause existing trace clone during time-stop
         if (traceCloneManager != null)
             traceCloneManager.PauseTraceClone();
 
-        Debug.Log(">>> ����ʱͣ�����ԣ�");
+        Debug.Log(">>> 进入时停（视界分身）");
         cameraLocked = true;
         lockedCameraRotation = Camera.main.transform.rotation;
         cameraOrbit.SetCameraLock(true, lockedCameraRotation, true);
@@ -195,6 +208,10 @@ public class CloneManager : MonoBehaviour
         currentClone.GetComponent<CharacterController>().enabled = true;
 
         IgnoreCollisionBetween(player, currentClone, true);
+
+        // 忽略分身与透明层物体的碰撞
+        IgnoreCollisionWithLayer(currentClone, transparentLayer, true);
+
         hasSeparated = false;
 
         cloneController.OnPositionChanged += (oldPos, newPos) => {
@@ -202,9 +219,6 @@ public class CloneManager : MonoBehaviour
         };
 
         CreateTriangleUI();
-        isCloneSelected = false;
-        selectedCarrier = player;
-        UpdateTriangleUIColor();
 
         isCloneActive = true;
         isTimeStopped = true;
@@ -213,14 +227,15 @@ public class CloneManager : MonoBehaviour
         EnablePlayerInput(currentClone, true);
 
         spawnProtectionTimer = SPAWN_PROTECTION_DURATION;
-        Debug.Log("���������ɣ��������ڲ������Ұ");
+        Debug.Log("视界分身已生成");
     }
 
-    private void ExitTimeStop(bool shouldGenerateSolid, bool handleTraceClone = true)
+    private void ExitTimeStop(bool shouldGenerateSolid, bool swapOnExit, bool handleTraceClone = true)
     {
         if (!isTimeStopped) return;
 
-        Debug.Log(">>> �˳�ʱͣ�����ԣ�");
+        Debug.Log(">>> 退出时停");
+
         cameraLocked = false;
         cameraOrbit.SetCameraLock(false, Quaternion.identity);
 
@@ -233,21 +248,14 @@ public class CloneManager : MonoBehaviour
 
             if (isSeparated)
             {
-                if (!isCloneSelected) // ���ֱ���Ϊ����
+                if (swapOnExit)
                 {
-                    CreateSolidClone(currentClone.transform.position, currentClone.transform.rotation);
-                    Destroy(currentClone);
-                    Debug.Log("���ֱ��壬�ڷ���λ�����ɲ���ʵ��");
-                }
-                else // ѡ�����Ϊ�����壺���ͱ��嵽����λ��
-                {
-                    playerCharController.enabled = false;
                     Vector3 originalPos = player.transform.position;
                     Quaternion originalRot = player.transform.rotation;
 
+                    playerCharController.enabled = false;
                     player.transform.position = currentClone.transform.position;
                     player.transform.rotation = currentClone.transform.rotation;
-
                     playerCharController.enabled = true;
                     playerCharController.Move(Vector3.zero);
 
@@ -257,13 +265,22 @@ public class CloneManager : MonoBehaviour
 
                     CreateSolidClone(originalPos, originalRot);
 
-                    Destroy(currentClone);
-                    Debug.Log($"ѡ������������ {originalPos} ������ {player.transform.position}");
+                    if (swapVFXPrefab != null)
+                        Instantiate(swapVFXPrefab, player.transform.position, Quaternion.identity);
+
+                    Debug.Log($"传送本体至 {currentClone.transform.position}，原位置固化");
                 }
+                else
+                {
+                    CreateSolidClone(currentClone.transform.position, currentClone.transform.rotation);
+                    Debug.Log("分身固化于最终位置");
+                }
+
+                Destroy(currentClone);
             }
             else
             {
-                Debug.Log("����δ�뱾�����룬������ʵ�壬ֱ�����ٷ���");
+                Debug.Log("分身未分离，不生成固化实体");
                 Destroy(currentClone);
             }
         }
@@ -280,32 +297,47 @@ public class CloneManager : MonoBehaviour
         isCloneActive = false;
         isTimeStopped = false;
         hasSeparated = false;
-        selectedCarrier = null;
         spawnProtectionTimer = 0f;
 
-        // Handle trace clone: resume or replace
         if (handleTraceClone && traceCloneManager != null)
         {
             if (traceCloneManager.HasSavedSequence() && shouldGenerateSolid)
             {
-                // New sequence saved during trace-to-vision switch: spawn new trace clone
                 traceCloneManager.SpawnTraceCloneFromSaved();
             }
             else
             {
-                // No new sequence or exit was forced: discard saved and resume old
                 traceCloneManager.ClearSavedSequence();
                 traceCloneManager.ResumeTraceClone();
             }
         }
     }
 
-    private void ToggleCarrierSelection()
+    private void SwapWithSolidClone()
     {
-        isCloneSelected = !isCloneSelected;
-        selectedCarrier = isCloneSelected ? currentClone : player;
-        UpdateTriangleUIColor();
-        Debug.Log($"�����л���{(isCloneSelected ? "����" : "����")}");
+        if (currentSolidClone == null) return;
+
+        Debug.Log(">>> 与固化实体交换位置");
+
+        playerCharController.enabled = false;
+        Vector3 clonePos = currentSolidClone.transform.position;
+        Quaternion cloneRot = currentSolidClone.transform.rotation;
+
+        currentSolidClone.transform.position = player.transform.position;
+        currentSolidClone.transform.rotation = player.transform.rotation;
+
+        player.transform.position = clonePos;
+        player.transform.rotation = cloneRot;
+
+        playerCharController.enabled = true;
+        playerCharController.Move(Vector3.zero);
+
+        float newYaw = cloneRot.eulerAngles.y;
+        float currentPitch = cameraOrbit.GetPitch();
+        cameraOrbit.SetYawPitch(newYaw, currentPitch);
+
+        if (swapVFXPrefab != null)
+            Instantiate(swapVFXPrefab, player.transform.position, Quaternion.identity);
     }
 
     private void CreateSolidClone(Vector3 position, Quaternion rotation)
@@ -326,14 +358,20 @@ public class CloneManager : MonoBehaviour
         if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
         rb.isKinematic = true;
 
-        Debug.Log($"���ɲ���ʵ���� {position}");
+        if (solidCloneVFXPrefab != null)
+        {
+            GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
+            vfx.transform.localPosition = Vector3.zero;
+        }
+
+        Debug.Log($"生成固化实体于 {position}");
     }
 
-    private bool IsCloneInSight()
+    private bool IsCloneInSight(GameObject target)
     {
         Camera cam = Camera.main;
-        Vector3 toClone = currentClone.transform.position - cam.transform.position;
-        float distance = toClone.magnitude;
+        Vector3 toTarget = target.transform.position - cam.transform.position;
+        float distance = toTarget.magnitude;
         const float maxSightDistance = 25f;
         if (distance > maxSightDistance) return false;
 
@@ -341,7 +379,7 @@ public class CloneManager : MonoBehaviour
         float verticalHalfAngle = 60f;
 
         Vector3 forward = cam.transform.forward;
-        Vector3 direction = toClone.normalized;
+        Vector3 direction = toTarget.normalized;
         float angleVer = Vector3.Angle(forward, direction);
         if (angleVer > 90f) return false;
 
@@ -352,29 +390,95 @@ public class CloneManager : MonoBehaviour
         if (angleHor <= horizontalHalfAngle && angleVer <= verticalHalfAngle)
             return true;
 
-        Vector3 viewportPos = cam.WorldToViewportPoint(currentClone.transform.position);
-        if (viewportPos.z > 0 && viewportPos.x >= -0.2f && viewportPos.x <= 1.2f && viewportPos.y >= -0.2f && viewportPos.y <= 1.2f)
-            return true;
-
-        return false;
+        Vector3 viewportPos = cam.WorldToViewportPoint(target.transform.position);
+        return viewportPos.z > 0 && viewportPos.x >= -0.2f && viewportPos.x <= 1.2f && viewportPos.y >= -0.2f && viewportPos.y <= 1.2f;
     }
 
-    private bool IsCloneOccluded()
+    /// <summary>
+    /// 检测目标是否被完全遮挡（即所有关键采样点的射线均被非透明障碍物阻挡）
+    /// </summary>
+    private bool IsCloneOccluded(GameObject target)
     {
         Camera cam = Camera.main;
-        Vector3 origin = cam.transform.position;
-        Vector3 dir = currentClone.transform.position - origin;
-        float distance = dir.magnitude;
-        if (distance < 0.2f) return false;
+        if (cam == null) return false;
 
-        if (Physics.Raycast(origin, dir, out RaycastHit hit, distance, occlusionMask))
+        // 收集采样点：包围盒中心 + 八个角点
+        List<Vector3> samplePoints = new List<Vector3>();
+
+        // 中心点
+        samplePoints.Add(target.transform.position);
+
+        // 尝试获取包围盒角点（若目标有 Renderer）
+        Renderer rend = target.GetComponentInChildren<Renderer>();
+        if (rend != null)
         {
-            Transform hitRoot = hit.transform.root;
-            if (hitRoot != player.transform && hitRoot != currentClone.transform)
-                return true;
+            Bounds bounds = rend.bounds;
+            Vector3 center = bounds.center;
+            Vector3 extents = bounds.extents;
+
+            // 八个角点
+            samplePoints.Add(center + new Vector3(extents.x, extents.y, extents.z));
+            samplePoints.Add(center + new Vector3(extents.x, extents.y, -extents.z));
+            samplePoints.Add(center + new Vector3(extents.x, -extents.y, extents.z));
+            samplePoints.Add(center + new Vector3(extents.x, -extents.y, -extents.z));
+            samplePoints.Add(center + new Vector3(-extents.x, extents.y, extents.z));
+            samplePoints.Add(center + new Vector3(-extents.x, extents.y, -extents.z));
+            samplePoints.Add(center + new Vector3(-extents.x, -extents.y, extents.z));
+            samplePoints.Add(center + new Vector3(-extents.x, -extents.y, -extents.z));
         }
-        return false;
+        else
+        {
+            // 若无渲染器，简单添加目标位置周围几个点
+            samplePoints.Add(target.transform.position + Vector3.up * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.down * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.left * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.right * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.forward * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.back * 0.5f);
+        }
+
+        // 检查每个采样点：只要有一个点未被阻挡，就认为未完全遮挡
+        foreach (Vector3 point in samplePoints)
+        {
+            Vector3 dir = point - cam.transform.position;
+            float distance = dir.magnitude;
+            if (distance < 0.2f) continue; // 太近忽略
+
+            if (!Physics.Raycast(cam.transform.position, dir, out RaycastHit hit, distance, occlusionMask))
+            {
+                // 没有击中任何东西 -> 可见
+                return false;
+            }
+            else
+            {
+                // 击中了物体，检查是否属于豁免对象
+                if (!IsHitConsideredOcclusion(hit, target))
+                    return false; // 击中的是玩家/分身/透明层，视为未遮挡
+            }
+        }
+
+        // 所有采样点都被阻挡
+        return true;
     }
+
+    /// <summary>
+    /// 判断射线击中的物体是否应被视为遮挡（非豁免对象）
+    /// </summary>
+    private bool IsHitConsideredOcclusion(RaycastHit hit, GameObject target)
+    {
+        Transform hitRoot = hit.transform.root;
+        // 玩家本体不阻挡
+        if (hitRoot == player.transform) return false;
+        // 分身自身不阻挡
+        if (hitRoot == target.transform) return false;
+        // 透明层物体不阻挡
+        if (hit.transform.gameObject.layer == LayerMask.NameToLayer("Transparent")) return false;
+
+        return true; // 其他物体视为遮挡
+    }
+
+    private bool IsCloneInSight() => currentClone != null && IsCloneInSight(currentClone);
+    private bool IsCloneOccluded() => currentClone != null && IsCloneOccluded(currentClone);
 
     private void ReplaceMaterials(GameObject obj, Material newMat)
     {
@@ -392,6 +496,27 @@ public class CloneManager : MonoBehaviour
                 Physics.IgnoreCollision(ca, cb, ignore);
     }
 
+    private void IgnoreCollisionWithLayer(GameObject obj, LayerMask layerMask, bool ignore)
+    {
+        Collider[] objColliders = obj.GetComponentsInChildren<Collider>();
+        // 查找场景中所有位于指定层的物体
+        var allObjects = FindObjectsOfType<GameObject>();
+        foreach (var other in allObjects)
+        {
+            if ((layerMask.value & (1 << other.layer)) != 0)
+            {
+                Collider[] otherColliders = other.GetComponentsInChildren<Collider>();
+                foreach (var ca in objColliders)
+                {
+                    foreach (var cb in otherColliders)
+                    {
+                        Physics.IgnoreCollision(ca, cb, ignore);
+                    }
+                }
+            }
+        }
+    }
+
     private void DisablePlayerInput(GameObject obj, bool disable)
     {
         var input = obj.GetComponent<PlayerInput>();
@@ -406,42 +531,16 @@ public class CloneManager : MonoBehaviour
 
     private void CreateTriangleUI()
     {
-        if (triangleUIPrefab == null)
-        {
-            Debug.LogWarning("δָ��������UIԤ���壬ʹ��Ĭ�ϴ���");
-            GameObject canvasObj = new GameObject("TriangleUI");
-            Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.worldCamera = Camera.main;
-            RectTransform rect = canvasObj.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(0.5f, 0.5f);
-            triangleUI = canvasObj;
+        if (triangleUIPrefab == null) return;
 
-            var textObj = new GameObject("Text");
-            textObj.transform.SetParent(canvasObj.transform);
-            triangleText = textObj.AddComponent<TextMeshProUGUI>();
-            triangleText.text = "��";
-            triangleText.fontSize = 4;
-            triangleText.alignment = TextAlignmentOptions.Center;
-            RectTransform textRect = textObj.GetComponent<RectTransform>();
-            textRect.sizeDelta = new Vector2(1, 1);
-        }
-        else
-        {
-            triangleUI = Instantiate(triangleUIPrefab);
-            triangleText = triangleUI.GetComponentInChildren<TMP_Text>();
-        }
+        triangleUI = Instantiate(triangleUIPrefab);
+        triangleText = triangleUI.GetComponentInChildren<TMP_Text>();
+        if (triangleText != null)
+            triangleText.color = unselectedColor;
 
         triangleUI.transform.SetParent(currentClone.transform);
         triangleUI.transform.localPosition = new Vector3(0, 1.5f, 0);
         triangleUI.transform.localScale = Vector3.one * 0.2f;
-        UpdateTriangleUIColor();
-    }
-
-    private void UpdateTriangleUIColor()
-    {
-        if (triangleText != null)
-            triangleText.color = isCloneSelected ? selectedColor : unselectedColor;
     }
 
     public void OnCloneMoved(Vector3 oldPos, Vector3 newPos)
@@ -451,7 +550,7 @@ public class CloneManager : MonoBehaviour
         {
             hasSeparated = true;
             IgnoreCollisionBetween(player, currentClone, false);
-            Debug.Log("���������뱾�壬��ײ�ָ�");
+            Debug.Log("分身已分离");
         }
     }
 
@@ -466,12 +565,11 @@ public class CloneManager : MonoBehaviour
     public void ForceExitTimeStop(bool shouldGenerateSolid, bool handleTraceClone = true)
     {
         if (isTimeStopped)
-            ExitTimeStop(shouldGenerateSolid, handleTraceClone);
+            ExitTimeStop(shouldGenerateSolid, swapOnExit: false, handleTraceClone: handleTraceClone);
     }
 
     public void ActivateVisionCloneFromTrace()
     {
-        // ֱ�ӵ��ü����߼�������Ҫȷ����ǰû�з���
         ActivateVisionClone();
     }
 }
