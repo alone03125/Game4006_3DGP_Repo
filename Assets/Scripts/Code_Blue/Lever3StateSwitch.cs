@@ -67,14 +67,14 @@ public class Lever3StateSwitch : MonoBehaviour, IInteractable
     {
         currentState = newState;
 
-        if (leverVisual != null)
-        {
-            Vector3 offset = middleEulerOffset;
-            if (currentState == LeverState.Forward) offset = forwardEulerOffset;
-            else if (currentState == LeverState.Backward) offset = backwardEulerOffset;
+        // if (leverVisual != null)
+        // {
+        //     Vector3 offset = middleEulerOffset;
+        //     if (currentState == LeverState.Forward) offset = forwardEulerOffset;
+        //     else if (currentState == LeverState.Backward) offset = backwardEulerOffset;
 
-            leverVisual.localRotation = baseLocalRotation * Quaternion.Euler(offset);
-        }
+        //     leverVisual.localRotation = baseLocalRotation * Quaternion.Euler(offset);
+        // }
 
         if (currentState == LeverState.Forward) onForward?.Invoke();
         else if (currentState == LeverState.Middle) onMiddle?.Invoke();

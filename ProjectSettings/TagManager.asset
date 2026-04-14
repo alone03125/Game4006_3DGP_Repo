@@ -9,6 +9,8 @@ TagManager:
   - SolidClone
   - TracePhantom
   - TraceClone
+  - Elevator
+  - Transparent
   layers:
   - Default
   - TransparentFX
@@ -21,7 +23,7 @@ TagManager:
   - Door
   - Lazer
   - Obs
-  - 
+  - Elevator
   - 
   - 
   - 

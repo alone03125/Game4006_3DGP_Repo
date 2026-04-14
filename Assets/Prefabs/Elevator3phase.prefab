@@ -29,7 +29,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7463866977897385949}
   - {fileID: 5610922511280033337}
   - {fileID: 8910771756849510665}
   - {fileID: 6458277671014056479}
@@ -95,11 +94,11 @@ Transform:
   m_GameObject: {fileID: 5167225770818067849}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 5.3897734, y: -2.4806335, z: 6.39439}
-  m_LocalScale: {x: 0.444767, y: 0.44708362, z: 1.5605667}
+  m_LocalPosition: {x: -1.9245665, y: -0.9671035, z: 0.5713863}
+  m_LocalScale: {x: 0.1517769, y: 0.15256745, z: 0.53254396}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 3056356012446247047}
+  m_Father: {fileID: 5610922511280033337}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &8569037537053830140
 MeshFilter:
@@ -189,9 +188,9 @@ MonoBehaviour:
   currentState: 1
   cooldown: 0.2
   leverVisual: {fileID: 0}
-  forwardEuler: {x: -25, y: 0, z: 0}
-  middleEuler: {x: 0, y: 0, z: 0}
-  backwardEuler: {x: 25, y: 0, z: 0}
+  forwardEulerOffset: {x: -25, y: 0, z: 0}
+  middleEulerOffset: {x: 0, y: 0, z: 0}
+  backwardEulerOffset: {x: 25, y: 0, z: 0}
   onForward:
     m_PersistentCalls:
       m_Calls:
@@ -300,7 +299,8 @@ Transform:
   m_LocalPosition: {x: 11.029523, y: 0.35336637, z: 4.72}
   m_LocalScale: {x: 2.9304, y: 2.9304, z: 2.9304}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 7463866977897385949}
   m_Father: {fileID: 3056356012446247047}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &492751888989246998
