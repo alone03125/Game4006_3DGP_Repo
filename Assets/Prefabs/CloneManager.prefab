@@ -46,18 +46,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2a267af436acc54c925cc7dc185f48b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 638034083987765836, guid: c5cd5493305950a4b8530acceeaa990a,
+    type: 3}
   visionCloneMaterial: {fileID: 2100000, guid: 02816cefa349a2544986be9ec62e9b3b, type: 2}
   solidCloneMaterial: {fileID: 2100000, guid: e051a88f4dd34214391eacf259b34f07, type: 2}
   triangleUIPrefab: {fileID: 0}
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  swapVFXPrefab: {fileID: 0}
+  swapVFXPrefab: {fileID: 3167520248557979349, guid: d5deb5398dd248642ab171154f145f5c,
+    type: 3}
   solidCloneVFXPrefab: {fileID: 0}
   separationDistance: 1
   proximityRadius: 2.5
   occlusionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  transparentLayers:
+    serializedVersion: 2
+    m_Bits: 256
 --- !u!114 &9014755463341818459
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -70,7 +75,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 329b74e5412b7e6419b679d4e906fb4a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 638034083987765836, guid: c5cd5493305950a4b8530acceeaa990a,
+    type: 3}
   phantomMaterial: {fileID: 2100000, guid: 7be7f1e6ca45e6a45a515e8c9eee284e, type: 2}
   traceCloneMaterial: {fileID: 2100000, guid: 2ee868505006fb047a8fba6cd1ea7d14, type: 2}
 --- !u!114 &7318817174579022191

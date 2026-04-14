@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5302050705503094258}
   - component: {fileID: 3722705922823308649}
   - component: {fileID: 5260228898749819415}
+  - component: {fileID: 1254609251729543234}
   m_Layer: 0
   m_Name: PauseSettings
   m_TagString: Untagged
@@ -71,4 +72,53 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 732d71bd17f02ad4e8d2a47df258acf1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  versionString: v0.1.0-dev
+  versionString: v0.4.2-dev
+--- !u!114 &1254609251729543234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9034803183159484241}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9bfb9e9fed5a5454d9a8a18d6a05ce02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rootCanvas: {fileID: 0}
+  pausePanel: {fileID: 0}
+  settingsPanel: {fileID: 0}
+  systemSettingsPanel: {fileID: 0}
+  controlOptionsPanel: {fileID: 0}
+  videoOptionsPanel: {fileID: 0}
+  audioOptionsPanel: {fileID: 0}
+  rebindPanel: {fileID: 0}
+  resumeButton: {fileID: 0}
+  settingsButton: {fileID: 0}
+  quitToMenuButton: {fileID: 0}
+  systemSettingsButton: {fileID: 0}
+  controlOptionsButton: {fileID: 0}
+  videoOptionsButton: {fileID: 0}
+  audioOptionsButton: {fileID: 0}
+  settingsBackButton: {fileID: 0}
+  restoreDefaultsButton: {fileID: 0}
+  systemBackButton: {fileID: 0}
+  rebindButton: {fileID: 0}
+  sensitivitySlider: {fileID: 0}
+  sensitivityValueText: {fileID: 0}
+  deadzoneSlider: {fileID: 0}
+  deadzoneValueText: {fileID: 0}
+  invertYToggle: {fileID: 0}
+  controlBackButton: {fileID: 0}
+  resolutionDropdown: {fileID: 0}
+  windowModeDropdown: {fileID: 0}
+  showFPSToggle: {fileID: 0}
+  fovSlider: {fileID: 0}
+  fovValueText: {fileID: 0}
+  shakeEnabledToggle: {fileID: 0}
+  shakeIntensitySlider: {fileID: 0}
+  shakeIntensityValueText: {fileID: 0}
+  videoBackButton: {fileID: 0}
+  audioBackButton: {fileID: 0}
+  rebindContentParent: {fileID: 0}
+  rebindBackButton: {fileID: 0}

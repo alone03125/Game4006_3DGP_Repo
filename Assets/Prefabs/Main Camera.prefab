@@ -153,7 +153,9 @@ MonoBehaviour:
   target: {fileID: 0}
   headOffset: {x: 0, y: 1.2, z: 0}
   lookSensitivity: 8
+  invertY: 0
   enableShake: 1
+  shakeIntensityMultiplier: 1
   horizontalShakeAmplitude: 0.25
   verticalShakeAmplitude: 0.15
   maxShakeFrequency: 5
@@ -199,3 +201,4 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  shakeTransitionBlendSpeed: 4
