@@ -326,6 +326,12 @@ public class TraceCloneManager : MonoBehaviour
         foreach (var r in renderers) r.enabled = false;
         isTraceClonePaused = true;
         Debug.Log("[TraceClone] Trace clone paused and hidden");
+
+        var actor = currentTraceClone.GetComponent<InteractionActor>();
+        if (actor != null) actor.SetCanAffectWorldMechanisms(false);
+
+        var colliders = currentTraceClone.GetComponentsInChildren<Collider>();
+        foreach (var c in colliders) c.enabled = false;
     }
 
     /// <summary>
@@ -341,6 +347,13 @@ public class TraceCloneManager : MonoBehaviour
         foreach (var r in renderers) r.enabled = true;
         isTraceClonePaused = false;
         Debug.Log("[TraceClone] Trace clone resumed and visible");
+
+
+        var actor = currentTraceClone.GetComponent<InteractionActor>();
+        if (actor != null) actor.SetCanAffectWorldMechanisms(true);
+
+        var colliders = currentTraceClone.GetComponentsInChildren<Collider>();
+        foreach (var c in colliders) c.enabled = true;
     }
 
     /// <summary>

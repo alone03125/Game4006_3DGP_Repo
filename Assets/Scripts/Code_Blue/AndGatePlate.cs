@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-public class DualPressurePlateGate : MonoBehaviour
+public class AndGatePlate : MonoBehaviour
 {
     [Header("Output Events")]
     [SerializeField] private UnityEvent onBothPressed;

@@ -311,7 +311,7 @@ GameObject:
   - component: {fileID: 5292229108422884159}
   - component: {fileID: 1353983000289305538}
   m_Layer: 0
-  m_Name: DualPlate
+  m_Name: ANDPlate
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

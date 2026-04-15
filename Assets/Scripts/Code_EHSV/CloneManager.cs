@@ -368,6 +368,20 @@ public class CloneManager : MonoBehaviour
         currentSolidClone.name = "SolidClone";
         ReplaceMaterials(currentSolidClone, solidCloneMaterial);
 
+
+        //Disable input and interaction
+        var solidInput = currentSolidClone.GetComponent<PlayerInput>(); //B
+        if (solidInput != null) //B
+        {
+            solidInput.enabled = false;
+        }
+
+        var solidInteraction = currentSolidClone.GetComponent<PlayerInteraction>();
+        if (solidInteraction != null) //B
+        {
+            solidInteraction.enabled = false;
+        }
+
         var controller = currentSolidClone.GetComponent<PlayerController>();
         if (controller != null) controller.enabled = false;
         var charController = currentSolidClone.GetComponent<CharacterController>();

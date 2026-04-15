@@ -1,14 +1,15 @@
+using System.Collections;
 using UnityEngine;
 
 public class Lazer : MonoBehaviour
 {
-    [Header("Player Respawn")]
-    [SerializeField] private Transform respawnPoint;
-
     [Header("Safety")]
     [SerializeField] private float hitCooldown = 0.1f;
+    [SerializeField] private float reloadDelay = 0.05f;
 
     private float _nextHitTime;
+    private bool _isReloading;
+
     private TraceCloneManager _traceMgr;
     private CloneManager _cloneMgr;
     private LazerFreeze _freeze;
@@ -25,30 +26,38 @@ public class Lazer : MonoBehaviour
         if (_freeze != null && _freeze.IsFrozen)
             return;
 
-        if (Time.time < _nextHitTime) return;
+        if (_isReloading || Time.time < _nextHitTime)
+            return;
+
         _nextHitTime = Time.time + hitCooldown;
 
         Transform root = other.transform.root;
         if (root == null) return;
 
-        //Delete TracePhantom
+        Debug.Log("Lazer hit " + root.tag);
+        Debug.Log("Lazer hit " + root.name);
+
+        //Discard recording on hit TracePhantom
         if (root.CompareTag("TracePhantom"))
         {
             if (_traceMgr != null) _traceMgr.ForceExitClean();
             else Destroy(root.gameObject);
+
             Debug.Log("Lazer hit TracePhantom -> discard recording");
             return;
         }
-        //Stop Time VisionClone
+
+        //Remove VisionClone
         if (root.CompareTag("VisionClone"))
         {
             if (_cloneMgr != null) _cloneMgr.ForceExitTimeStop(false);
             else Destroy(root.gameObject);
+
             Debug.Log("Lazer hit VisionClone -> removed");
             return;
         }
 
-        //Delete TraceClone
+        //Remove TraceClone
         if (root.CompareTag("TraceClone"))
         {
             Destroy(root.gameObject);
@@ -56,41 +65,18 @@ public class Lazer : MonoBehaviour
             return;
         }
 
-        // Teleport Player to Respawn Point
+        //Reset level on hit Player
         if (root.CompareTag("Player"))
         {
-            TeleportToRespawn(root);
-            Debug.Log("Lazer hit Player -> respawn");
+            Debug.Log("Lazer hit Player -> reset level");
+            StartCoroutine(ReloadCurrentLevel());
         }
     }
 
-
-    private void TeleportToRespawn(Transform targetRoot)
+    //Reset level on hit Player
+    private IEnumerator ReloadCurrentLevel()
     {
-        if (respawnPoint == null)
-        {
-            Debug.LogWarning("Respawn point is not assigned on Lazer.");
-            return;
-        }
-
-        CharacterController cc = targetRoot.GetComponent<CharacterController>();
-        Rigidbody rb = targetRoot.GetComponent<Rigidbody>();
-
-        if (cc != null) cc.enabled = false;
-
-        targetRoot.position = respawnPoint.position;
-        targetRoot.rotation = respawnPoint.rotation;
-
-        if (rb != null)
-        {
-            rb.velocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-        }
-
-        if (cc != null)
-        {
-            cc.enabled = true;
-            cc.Move(Vector3.zero);
-        }
+        _isReloading = true;
+        yield return LevelReset.ReloadCurrentLevel(reloadDelay);
     }
 }
