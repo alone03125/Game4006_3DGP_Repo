@@ -5,6 +5,8 @@ using System.Collections.Generic;
 
 public class CloneManager : MonoBehaviour
 {
+    private InputActionMap inputActions;
+
     [Header("References")]
     public GameObject playerPrefab;
     public Material visionCloneMaterial;
@@ -69,6 +71,7 @@ public class CloneManager : MonoBehaviour
         playerInput = player.GetComponent<PlayerInput>();
         cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
         traceCloneManager = GetComponent<TraceCloneManager>();
+        TryRefreshRuntimeRefs();
 
         if (warningRenderer != null)
             warningMaterialInstance = warningRenderer.material;
@@ -122,6 +125,43 @@ public class CloneManager : MonoBehaviour
         {
             spawnProtectionTimer -= Time.deltaTime;
         }
+    }
+
+    private void OnEnable()
+    {
+        inputActions?.Enable();
+    }
+
+    private void OnDisable()
+    {
+        inputActions?.Disable();
+    }
+
+    private bool TryRefreshRuntimeRefs()
+    {
+        if (player == null)
+            player = GameObject.FindGameObjectWithTag("Player");
+
+        if (player != null)
+        {
+            if (playerController == null)
+                playerController = player.GetComponent<PlayerController>();
+
+            if (playerCharController == null)
+                playerCharController = player.GetComponent<CharacterController>();
+        }
+
+        if (cameraOrbit == null && Camera.main != null)
+            cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
+
+        if (traceCloneManager == null)
+            traceCloneManager = GetComponent<TraceCloneManager>();
+
+        return player != null
+            && playerController != null
+            && playerCharController != null
+            && cameraOrbit != null
+            && Camera.main != null;
     }
 
     private void UpdateWarningEffect()
@@ -295,6 +335,12 @@ public class CloneManager : MonoBehaviour
     // ---------- 输入回调 ----------
     public void OnVisionActivate(InputValue value)
     {
+        if (!TryRefreshRuntimeRefs())
+        {
+            Debug.LogWarning("[CloneManager] Runtime refs missing, ignore Q.");
+            return;
+        }
+
         if (!value.isPressed) return;
         Debug.Log($"[CloneManager] VisionActivate (Q) pressed, isTimeStopped={isTimeStopped}");
 
@@ -330,6 +376,12 @@ public class CloneManager : MonoBehaviour
 
     private void ActivateVisionClone()
     {
+        if (!TryRefreshRuntimeRefs())
+        {
+            Debug.LogWarning("[CloneManager] Runtime refs missing, ignore ActivateVisionClone.");
+            return;
+        }
+
         if (isCloneActive)
         {
             Debug.LogWarning("尝试激活视界分身，但已有激活的分身");
