@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class CloneManager : MonoBehaviour
 {
@@ -15,18 +16,18 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("VFX")]
-    public GameObject swapVFXPrefab;
-    public GameObject solidCloneVFXPrefab;
+    public GameObject swapVFXPrefab;              // 传送特效（蓝色/默认）
+    public GameObject solidCloneVFXPrefab;        // 固化实体标记特效
     public GameObject disappearVFXPrefab;         // 消失特效（红色）
 
     [Header("Detection")]
     public float separationDistance = 0.1f;
-    public float proximityRadius = 2.5f;          // 保护半径：在此距离内不进行消失检测
     public LayerMask occlusionMask = -1;
-    public LayerMask transparentLayers;
+    public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
 
     [Header("Disappear Warning")]
-    public Renderer warningRenderer;
+    public Renderer warningRenderer;              // 可选：3D Renderer 预警（不推荐）
+    public Image warningUIImage;                  // 推荐：UI Image 全屏预警
     public string warningMaterialProperty = "_Alpha";
     public AnimationCurve warningIntensityCurve = AnimationCurve.Linear(0, 0, 1, 1);
     [Range(0, 1)] public float warningEdgeThreshold = 0.2f;
@@ -34,6 +35,7 @@ public class CloneManager : MonoBehaviour
     private const float SWAP_VFX_DURATION = 2.5f;
     private const float DISAPPEAR_VFX_DURATION = 2.0f;
 
+    // 状态
     private bool isTimeStopped = false;
     private bool cameraLocked = false;
     private bool isCloneActive = false;
@@ -57,6 +59,7 @@ public class CloneManager : MonoBehaviour
     private float spawnProtectionTimer = 0f;
     private const float SPAWN_PROTECTION_DURATION = 0.5f;
 
+    // 预警相关
     private Material warningMaterialInstance;
     private float currentWarningAlpha = 0f;
 
@@ -82,40 +85,32 @@ public class CloneManager : MonoBehaviour
         {
             if (currentSolidClone != null)
             {
-                // 固化实体也应用保护半径逻辑（距离本体近时不消失）
-                float dist = Vector3.Distance(player.transform.position, currentSolidClone.transform.position);
-                if (dist > proximityRadius)
+                if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
                 {
-                    if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
-                    {
-                        Debug.Log("固化实体离开视野或被完全遮挡，销毁");
-                        SpawnDisappearVFX();
-                        Destroy(currentSolidClone);
-                        currentSolidClone = null;
-                    }
+                    Debug.Log("固化实体离开视野或被完全遮挡，销毁");
+                    SpawnDisappearVFX();
+                    Destroy(currentSolidClone);
+                    currentSolidClone = null;
                 }
             }
             return;
         }
 
+        // 时停期间相机锁定
         if (cameraLocked && player != null)
         {
             Camera.main.transform.position = player.transform.position + cameraOrbit.headOffset;
             Camera.main.transform.rotation = lockedCameraRotation;
         }
 
+        // 视界分身的视野/遮挡检测（生成保护期内跳过）
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
-            float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
-            // 只有超出保护半径才进行消失检测
-            if (distToPlayer > proximityRadius)
+            if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
             {
-                if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
-                {
-                    Debug.Log($"分身距离 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被完全遮挡，强制退出时停");
-                    SpawnDisappearVFX();
-                    ExitTimeStop(false, swapOnExit: false);
-                }
+                Debug.Log("分身丢失视野或被完全遮挡，强制退出时停");
+                SpawnDisappearVFX();
+                ExitTimeStop(false, swapOnExit: false);
             }
         }
         else if (spawnProtectionTimer > 0f)
@@ -126,27 +121,32 @@ public class CloneManager : MonoBehaviour
 
     private void UpdateWarningEffect()
     {
-        if (warningMaterialInstance == null) return;
+        float targetAlpha = 0f;
 
-        float warningFactor = 0f;
-        if (isCloneActive && currentClone != null)
+        // 仅当视界分身激活且不在生成保护期内才计算预警
+        if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
-            // 保护半径内不显示预警（可选）
-            float dist = Vector3.Distance(player.transform.position, currentClone.transform.position);
-            if (dist > proximityRadius)
-            {
-                float occlusionRatio = GetOcclusionRatio(currentClone);
-                float edgeDistanceRatio = GetEdgeDistanceRatio(currentClone);
-                warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
-            }
+            float occlusionRatio = GetOcclusionRatio(currentClone);
+            float edgeDistanceRatio = GetEdgeDistanceRatio(currentClone);
+            float warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
+            targetAlpha = warningIntensityCurve.Evaluate(warningFactor);
         }
 
-        float targetAlpha = warningIntensityCurve.Evaluate(warningFactor);
         currentWarningAlpha = Mathf.Lerp(currentWarningAlpha, targetAlpha, Time.deltaTime * 5f);
-        warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
+
+        // 应用到材质或 UI Image
+        if (warningMaterialInstance != null)
+        {
+            warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
+        }
+        if (warningUIImage != null)
+        {
+            Color c = warningUIImage.color;
+            c.a = currentWarningAlpha;
+            warningUIImage.color = c;
+        }
     }
 
-    // ... 其余方法（GetOcclusionRatio, GetEdgeDistanceRatio, GenerateSamplePoints 等）保持不变 ...
     private float GetOcclusionRatio(GameObject target)
     {
         Camera cam = Camera.main;
