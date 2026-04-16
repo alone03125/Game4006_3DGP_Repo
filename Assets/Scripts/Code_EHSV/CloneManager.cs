@@ -16,15 +16,16 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("VFX")]
-    public GameObject swapVFXPrefab;              // 传送特效（蓝色/默认）
-    public GameObject solidCloneVFXPrefab;        // 固化实体标记特效
-    public GameObject disappearVFXPrefab;         // 消失特效（红色）
+    public GameObject swapVFXPrefab;              // 传送特效（自动销毁，跟随摄像机）
+    public GameObject solidCloneVFXPrefab;        // 固化实体标记特效（跟随实体）
 
     [Header("Detection")]
     public float separationDistance = 0.1f;
+    public float proximityRadius = 2.5f;
     public LayerMask occlusionMask = -1;
     public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
 
+<<<<<<< HEAD
     [Header("Disappear Warning")]
     public Renderer warningRenderer;              // 可选：3D Renderer 预警（不推荐）
     public Image warningUIImage;                  // 推荐：UI Image 全屏预警
@@ -34,6 +35,9 @@ public class CloneManager : MonoBehaviour
 
     private const float SWAP_VFX_DURATION = 2.5f;
     private const float DISAPPEAR_VFX_DURATION = 2.0f;
+=======
+    private const float SWAP_VFX_DURATION = 2.5f; // 传送特效持续时间
+>>>>>>> parent of 393d76b (shader test v1.0)
 
     // 状态
     private bool isTimeStopped = false;
@@ -51,17 +55,15 @@ public class CloneManager : MonoBehaviour
     private SimpleCameraOrbit cameraOrbit;
     private GameObject player;
     private CharacterController playerCharController;
-    private PlayerInput playerInput;
 
     private Quaternion lockedCameraRotation;
+    private InputAction qAction;
+    private InputAction tabAction;
+    private InputAction eAction;
     private TraceCloneManager traceCloneManager;
 
     private float spawnProtectionTimer = 0f;
     private const float SPAWN_PROTECTION_DURATION = 0.5f;
-
-    // 预警相关
-    private Material warningMaterialInstance;
-    private float currentWarningAlpha = 0f;
 
     private void Awake()
     {
@@ -69,26 +71,29 @@ public class CloneManager : MonoBehaviour
         if (player == null) Debug.LogError("未找到Player标签的游戏对象");
         playerController = player.GetComponent<PlayerController>();
         playerCharController = player.GetComponent<CharacterController>();
-        playerInput = player.GetComponent<PlayerInput>();
         cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
         traceCloneManager = GetComponent<TraceCloneManager>();
 
-        if (warningRenderer != null)
-            warningMaterialInstance = warningRenderer.material;
+        var inputActions = new InputActionMap();
+        qAction = inputActions.AddAction("Q", binding: "<Keyboard>/q");
+        tabAction = inputActions.AddAction("Tab", binding: "<Keyboard>/tab");
+        eAction = inputActions.AddAction("E", binding: "<Keyboard>/e");
+        qAction.performed += OnQPerformed;
+        tabAction.performed += OnTabPerformed;
+        eAction.performed += OnEPerformed;
+        inputActions.Enable();
     }
 
     private void Update()
     {
-        UpdateWarningEffect();
-
         if (!isTimeStopped)
         {
+            // 非时停下，检测固化实体是否应消失
             if (currentSolidClone != null)
             {
                 if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
                 {
                     Debug.Log("固化实体离开视野或被完全遮挡，销毁");
-                    SpawnDisappearVFX();
                     Destroy(currentSolidClone);
                     currentSolidClone = null;
                 }
@@ -106,10 +111,12 @@ public class CloneManager : MonoBehaviour
         // 视界分身的视野/遮挡检测（生成保护期内跳过）
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
-            if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
+            float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
+            bool isInProximity = distToPlayer <= proximityRadius;
+
+            if (!isInProximity && (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone)))
             {
-                Debug.Log("分身丢失视野或被完全遮挡，强制退出时停");
-                SpawnDisappearVFX();
+                Debug.Log($"分身距离本体 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被完全遮挡，强制退出时停");
                 ExitTimeStop(false, swapOnExit: false);
             }
         }
@@ -119,8 +126,9 @@ public class CloneManager : MonoBehaviour
         }
     }
 
-    private void UpdateWarningEffect()
+    private void OnQPerformed(InputAction.CallbackContext ctx)
     {
+<<<<<<< HEAD
         float targetAlpha = 0f;
 
         // 仅当视界分身激活且不在生成保护期内才计算预警
@@ -298,6 +306,8 @@ public class CloneManager : MonoBehaviour
         if (!value.isPressed) return;
         Debug.Log($"[CloneManager] VisionActivate (Q) pressed, isTimeStopped={isTimeStopped}");
 
+=======
+>>>>>>> parent of 393d76b (shader test v1.0)
         if (!isTimeStopped)
         {
             if (traceCloneManager != null && traceCloneManager.IsPhantomActive())
@@ -313,28 +323,55 @@ public class CloneManager : MonoBehaviour
         }
     }
 
-    public void OnVisionTransfer(InputValue value)
+    private void OnTabPerformed(InputAction.CallbackContext ctx)
     {
-        if (!value.isPressed) return;
-        Debug.Log($"[CloneManager] VisionTransfer (Tab) pressed, isTimeStopped={isTimeStopped}, hasSolidClone={currentSolidClone != null}");
-
         if (isTimeStopped && isCloneActive)
         {
+            // 时停内按下Tab：传送本体并固化原位置，然后退出时停
             ExitTimeStop(true, swapOnExit: true);
         }
         else if (!isTimeStopped && currentSolidClone != null)
         {
+            // 非时停下与固化实体交换位置
             SwapWithSolidClone();
         }
     }
 
+    private void OnEPerformed(InputAction.CallbackContext ctx)
+    {
+        if (isTimeStopped && isCloneActive)
+            SwitchToTracePhantom();
+    }
+
+    private void SwitchToTracePhantom()
+    {
+        if (!isTimeStopped || !isCloneActive) return;
+
+        Debug.Log(">>> [CloneManager] 从视界分身切换到循迹幻影");
+
+        cameraLocked = false;
+        cameraOrbit.SetCameraLock(false, Quaternion.identity);
+
+        playerController.canMove = true;
+        playerController.freezeGravity = false;
+
+        if (currentClone != null) Destroy(currentClone);
+        if (triangleUI != null) Destroy(triangleUI);
+        DisablePlayerInput(player, false);
+
+        currentClone = null;
+        isCloneActive = false;
+        isTimeStopped = false;
+        hasSeparated = false;
+        spawnProtectionTimer = 0f;
+
+        if (traceCloneManager != null)
+            traceCloneManager.ActivateTracePhantom();
+    }
+
     private void ActivateVisionClone()
     {
-        if (isCloneActive)
-        {
-            Debug.LogWarning("尝试激活视界分身，但已有激活的分身");
-            return;
-        }
+        if (isCloneActive) return;
 
         if (currentSolidClone != null) Destroy(currentSolidClone);
 
@@ -368,7 +405,10 @@ public class CloneManager : MonoBehaviour
 
         currentClone.GetComponent<CharacterController>().enabled = true;
 
+        // 忽略与玩家的碰撞
         IgnoreCollisionBetween(player, currentClone, true);
+
+        // 忽略与透明层物体的碰撞
         IgnoreCollisionWithTransparentLayers(currentClone, true);
 
         hasSeparated = false;
@@ -382,7 +422,7 @@ public class CloneManager : MonoBehaviour
         isCloneActive = true;
         isTimeStopped = true;
 
-        SetPlayerInputEnabled(false);
+        DisablePlayerInput(player, true);
         EnablePlayerInput(currentClone, true);
 
         spawnProtectionTimer = SPAWN_PROTECTION_DURATION;
@@ -393,7 +433,7 @@ public class CloneManager : MonoBehaviour
     {
         if (!isTimeStopped) return;
 
-        Debug.Log($">>> 退出时停 (generateSolid={shouldGenerateSolid}, swapOnExit={swapOnExit})");
+        Debug.Log(">>> 退出时停");
 
         cameraLocked = false;
         cameraOrbit.SetCameraLock(false, Quaternion.identity);
@@ -423,6 +463,8 @@ public class CloneManager : MonoBehaviour
                     cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
                     CreateSolidClone(originalPos, originalRot);
+
+                    // 传送特效：生成在摄像机前并跟随摄像机
                     SpawnSwapVFX();
 
                     Debug.Log($"传送本体至 {currentClone.transform.position}，原位置固化");
@@ -447,7 +489,7 @@ public class CloneManager : MonoBehaviour
         }
 
         if (triangleUI != null) Destroy(triangleUI);
-        SetPlayerInputEnabled(true);
+        DisablePlayerInput(player, false);
         if (currentClone != null) EnablePlayerInput(currentClone, false);
 
         currentClone = null;
@@ -493,17 +535,19 @@ public class CloneManager : MonoBehaviour
         float currentPitch = cameraOrbit.GetPitch();
         cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
+        // 传送特效
         SpawnSwapVFX();
     }
 
     private void SpawnSwapVFX()
     {
         if (swapVFXPrefab == null) return;
+
         Camera cam = Camera.main;
         if (cam == null) return;
 
         GameObject vfx = Instantiate(swapVFXPrefab, cam.transform);
-        vfx.transform.localPosition = new Vector3(0, 0, 1.5f);
+        vfx.transform.localPosition = new Vector3(0, 0, 1.5f); // 摄像机前方1.5单位
         vfx.transform.localRotation = Quaternion.identity;
         Destroy(vfx, SWAP_VFX_DURATION);
     }
@@ -517,6 +561,20 @@ public class CloneManager : MonoBehaviour
         currentSolidClone.name = "SolidClone";
         ReplaceMaterials(currentSolidClone, solidCloneMaterial);
 
+
+        //Disable input and interaction
+        var solidInput = currentSolidClone.GetComponent<PlayerInput>(); //B
+        if (solidInput != null) //B
+        {
+            solidInput.enabled = false;
+        }
+
+        var solidInteraction = currentSolidClone.GetComponent<PlayerInteraction>();
+        if (solidInteraction != null) //B
+        {
+            solidInteraction.enabled = false;
+        }
+
         var controller = currentSolidClone.GetComponent<PlayerController>();
         if (controller != null) controller.enabled = false;
         var charController = currentSolidClone.GetComponent<CharacterController>();
@@ -526,6 +584,7 @@ public class CloneManager : MonoBehaviour
         if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
         rb.isKinematic = true;
 
+        // 固化实体标记特效（跟随实体）
         if (solidCloneVFXPrefab != null)
         {
             GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
@@ -535,10 +594,101 @@ public class CloneManager : MonoBehaviour
         Debug.Log($"生成固化实体于 {position}");
     }
 
+    // ---------- 视野与遮挡检测 ----------
+    private bool IsCloneInSight(GameObject target)
+    {
+        Camera cam = Camera.main;
+        Vector3 toTarget = target.transform.position - cam.transform.position;
+        float distance = toTarget.magnitude;
+        const float maxSightDistance = 25f;
+        if (distance > maxSightDistance) return false;
+
+        float horizontalHalfAngle = 80f;
+        float verticalHalfAngle = 60f;
+
+        Vector3 forward = cam.transform.forward;
+        Vector3 direction = toTarget.normalized;
+        float angleVer = Vector3.Angle(forward, direction);
+        if (angleVer > 90f) return false;
+
+        Vector3 forwardXZ = new Vector3(forward.x, 0, forward.z).normalized;
+        Vector3 dirXZ = new Vector3(direction.x, 0, direction.z).normalized;
+        float angleHor = Vector3.Angle(forwardXZ, dirXZ);
+
+        if (angleHor <= horizontalHalfAngle && angleVer <= verticalHalfAngle)
+            return true;
+
+        Vector3 viewportPos = cam.WorldToViewportPoint(target.transform.position);
+        return viewportPos.z > 0 && viewportPos.x >= -0.2f && viewportPos.x <= 1.2f && viewportPos.y >= -0.2f && viewportPos.y <= 1.2f;
+    }
+
+    private bool IsCloneOccluded(GameObject target)
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return false;
+
+        List<Vector3> samplePoints = new List<Vector3> { target.transform.position };
+
+        Renderer rend = target.GetComponentInChildren<Renderer>();
+        if (rend != null)
+        {
+            Bounds bounds = rend.bounds;
+            Vector3 center = bounds.center;
+            Vector3 ext = bounds.extents;
+            samplePoints.Add(center + new Vector3(ext.x, ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, -ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(ext.x, -ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, ext.y, -ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, -ext.y, ext.z));
+            samplePoints.Add(center + new Vector3(-ext.x, -ext.y, -ext.z));
+        }
+        else
+        {
+            samplePoints.Add(target.transform.position + Vector3.up * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.down * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.left * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.right * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.forward * 0.5f);
+            samplePoints.Add(target.transform.position + Vector3.back * 0.5f);
+        }
+
+        foreach (Vector3 point in samplePoints)
+        {
+            Vector3 dir = point - cam.transform.position;
+            float distance = dir.magnitude;
+            if (distance < 0.2f) continue;
+
+            if (!Physics.Raycast(cam.transform.position, dir, out RaycastHit hit, distance, occlusionMask))
+                return false;
+
+            if (!IsHitConsideredOcclusion(hit, target))
+                return false;
+        }
+
+        return true;
+    }
+
+    private bool IsHitConsideredOcclusion(RaycastHit hit, GameObject target)
+    {
+        Transform hitRoot = hit.transform.root;
+        if (hitRoot == player.transform || hitRoot == target.transform)
+            return false;
+
+        // 使用配置的透明层判断
+        if (((1 << hit.transform.gameObject.layer) & transparentLayers) != 0)
+            return false;
+
+        return true;
+    }
+
     private void IgnoreCollisionWithTransparentLayers(GameObject obj, bool ignore)
     {
         if (transparentLayers == 0) return;
 
+        // 获取所有透明层上的碰撞体
+        // 注意：此方法在运行时查找场景中所有游戏对象，若透明物体较多可优化为通过物理设置 IgnoreLayerCollision
         GameObject[] allObjects = FindObjectsOfType<GameObject>();
         foreach (GameObject other in allObjects)
         {
@@ -549,6 +699,10 @@ public class CloneManager : MonoBehaviour
         }
     }
 
+    private bool IsCloneInSight() => currentClone != null && IsCloneInSight(currentClone);
+    private bool IsCloneOccluded() => currentClone != null && IsCloneOccluded(currentClone);
+
+    // ---------- 辅助方法 ----------
     private void ReplaceMaterials(GameObject obj, Material newMat)
     {
         var renderers = obj.GetComponentsInChildren<Renderer>();
@@ -565,10 +719,10 @@ public class CloneManager : MonoBehaviour
                 Physics.IgnoreCollision(ca, cb, ignore);
     }
 
-    private void SetPlayerInputEnabled(bool enabled)
+    private void DisablePlayerInput(GameObject obj, bool disable)
     {
-        if (playerInput != null)
-            playerInput.enabled = enabled;
+        var input = obj.GetComponent<PlayerInput>();
+        if (input != null) input.enabled = !disable;
     }
 
     private void EnablePlayerInput(GameObject obj, bool enable)
