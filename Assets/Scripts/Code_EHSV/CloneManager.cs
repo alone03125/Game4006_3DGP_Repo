@@ -15,17 +15,18 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("VFX")]
-    public GameObject swapVFXPrefab;              // 传送特效（蓝色/默认）
-    public GameObject solidCloneVFXPrefab;        // 固化实体标记特效
+    public GameObject swapVFXPrefab;
+    public GameObject solidCloneVFXPrefab;
     public GameObject disappearVFXPrefab;         // 消失特效（红色）
 
     [Header("Detection")]
     public float separationDistance = 0.1f;
+    public float proximityRadius = 2.5f;          // 保护半径：在此距离内不进行消失检测
     public LayerMask occlusionMask = -1;
-    public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
+    public LayerMask transparentLayers;
 
     [Header("Disappear Warning")]
-    public Renderer warningRenderer;              // 显示预警效果的 Renderer
+    public Renderer warningRenderer;
     public string warningMaterialProperty = "_Alpha";
     public AnimationCurve warningIntensityCurve = AnimationCurve.Linear(0, 0, 1, 1);
     [Range(0, 1)] public float warningEdgeThreshold = 0.2f;
@@ -33,7 +34,6 @@ public class CloneManager : MonoBehaviour
     private const float SWAP_VFX_DURATION = 2.5f;
     private const float DISAPPEAR_VFX_DURATION = 2.0f;
 
-    // 状态
     private bool isTimeStopped = false;
     private bool cameraLocked = false;
     private bool isCloneActive = false;
@@ -57,7 +57,6 @@ public class CloneManager : MonoBehaviour
     private float spawnProtectionTimer = 0f;
     private const float SPAWN_PROTECTION_DURATION = 0.5f;
 
-    // 预警相关
     private Material warningMaterialInstance;
     private float currentWarningAlpha = 0f;
 
@@ -83,32 +82,40 @@ public class CloneManager : MonoBehaviour
         {
             if (currentSolidClone != null)
             {
-                if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
+                // 固化实体也应用保护半径逻辑（距离本体近时不消失）
+                float dist = Vector3.Distance(player.transform.position, currentSolidClone.transform.position);
+                if (dist > proximityRadius)
                 {
-                    Debug.Log("固化实体离开视野或被完全遮挡，销毁");
-                    SpawnDisappearVFX();
-                    Destroy(currentSolidClone);
-                    currentSolidClone = null;
+                    if (!IsCloneInSight(currentSolidClone) || IsCloneOccluded(currentSolidClone))
+                    {
+                        Debug.Log("固化实体离开视野或被完全遮挡，销毁");
+                        SpawnDisappearVFX();
+                        Destroy(currentSolidClone);
+                        currentSolidClone = null;
+                    }
                 }
             }
             return;
         }
 
-        // 时停期间相机锁定
         if (cameraLocked && player != null)
         {
             Camera.main.transform.position = player.transform.position + cameraOrbit.headOffset;
             Camera.main.transform.rotation = lockedCameraRotation;
         }
 
-        // 视界分身的视野/遮挡检测（生成保护期内跳过，已移除距离限制）
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
-            if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
+            float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
+            // 只有超出保护半径才进行消失检测
+            if (distToPlayer > proximityRadius)
             {
-                Debug.Log("分身丢失视野或被完全遮挡，强制退出时停");
-                SpawnDisappearVFX();
-                ExitTimeStop(false, swapOnExit: false);
+                if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
+                {
+                    Debug.Log($"分身距离 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被完全遮挡，强制退出时停");
+                    SpawnDisappearVFX();
+                    ExitTimeStop(false, swapOnExit: false);
+                }
             }
         }
         else if (spawnProtectionTimer > 0f)
@@ -124,9 +131,14 @@ public class CloneManager : MonoBehaviour
         float warningFactor = 0f;
         if (isCloneActive && currentClone != null)
         {
-            float occlusionRatio = GetOcclusionRatio(currentClone);
-            float edgeDistanceRatio = GetEdgeDistanceRatio(currentClone);
-            warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
+            // 保护半径内不显示预警（可选）
+            float dist = Vector3.Distance(player.transform.position, currentClone.transform.position);
+            if (dist > proximityRadius)
+            {
+                float occlusionRatio = GetOcclusionRatio(currentClone);
+                float edgeDistanceRatio = GetEdgeDistanceRatio(currentClone);
+                warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
+            }
         }
 
         float targetAlpha = warningIntensityCurve.Evaluate(warningFactor);
@@ -134,6 +146,7 @@ public class CloneManager : MonoBehaviour
         warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
     }
 
+    // ... 其余方法（GetOcclusionRatio, GetEdgeDistanceRatio, GenerateSamplePoints 等）保持不变 ...
     private float GetOcclusionRatio(GameObject target)
     {
         Camera cam = Camera.main;
