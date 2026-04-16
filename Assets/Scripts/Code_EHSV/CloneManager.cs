@@ -52,16 +52,21 @@ public class CloneManager : MonoBehaviour
     private float spawnProtectionTimer = 0f;
     private const float SPAWN_PROTECTION_DURATION = 0.5f;
 
+    private InputActionMap inputActions; //B
+
     private void Awake()
     {
-        player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null) Debug.LogError("未找到Player标签的游戏对象");
-        playerController = player.GetComponent<PlayerController>();
-        playerCharController = player.GetComponent<CharacterController>();
-        cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
-        traceCloneManager = GetComponent<TraceCloneManager>();
+        TryRefreshRuntimeRefs(); //B
 
-        var inputActions = new InputActionMap();
+        // player = GameObject.FindGameObjectWithTag("Player");
+        // if (player == null) Debug.LogError("未找到Player标签的游戏对象");
+        // playerController = player.GetComponent<PlayerController>();
+        // playerCharController = player.GetComponent<CharacterController>();
+        // cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
+        // traceCloneManager = GetComponent<TraceCloneManager>();
+
+        // var inputActions = new InputActionMap();
+        inputActions = new InputActionMap("CloneInput");
         qAction = inputActions.AddAction("Q", binding: "<Keyboard>/q");
         tabAction = inputActions.AddAction("Tab", binding: "<Keyboard>/tab");
         eAction = inputActions.AddAction("E", binding: "<Keyboard>/e");
@@ -113,8 +118,54 @@ public class CloneManager : MonoBehaviour
         }
     }
 
+    private void OnEnable()//b
+    {
+        inputActions?.Enable();//b
+    }
+
+    private void OnDisable()//b
+    {
+        inputActions?.Disable();//b
+    }
+
+    private bool TryRefreshRuntimeRefs()//b
+    {
+        if (player == null)
+            player = GameObject.FindGameObjectWithTag("Player");
+
+        if (player != null)
+        {
+            if (playerController == null)
+                playerController = player.GetComponent<PlayerController>();
+
+            if (playerCharController == null)
+                playerCharController = player.GetComponent<CharacterController>();
+        }
+
+        if (cameraOrbit == null && Camera.main != null)
+            cameraOrbit = Camera.main.GetComponent<SimpleCameraOrbit>();
+
+        if (traceCloneManager == null)
+            traceCloneManager = GetComponent<TraceCloneManager>();
+
+        return player != null
+            && playerController != null
+            && playerCharController != null
+            && cameraOrbit != null
+            && Camera.main != null;
+    }
+
+
     private void OnQPerformed(InputAction.CallbackContext ctx)
     {
+
+        if (!TryRefreshRuntimeRefs())//b
+        {
+            Debug.LogWarning("[CloneManager] Runtime refs missing, ignore Q.");
+            return;
+        }
+
+
         if (!isTimeStopped)
         {
             if (traceCloneManager != null && traceCloneManager.IsPhantomActive())
@@ -178,11 +229,18 @@ public class CloneManager : MonoBehaviour
 
     private void ActivateVisionClone()
     {
-        if (isCloneActive) return;
 
-        if (currentSolidClone != null) Destroy(currentSolidClone);
+        if (!TryRefreshRuntimeRefs())//b
+        {
+            Debug.LogWarning("[CloneManager] Runtime refs missing, ignore ActivateVisionClone.");
+            return;
+        }
 
-        if (traceCloneManager != null)
+        if (isCloneActive) return;//b
+
+        if (currentSolidClone != null) Destroy(currentSolidClone);//b
+
+        if (traceCloneManager != null)//b
             traceCloneManager.PauseTraceClone();
 
         Debug.Log(">>> 进入时停（视界分身）");
@@ -565,8 +623,25 @@ public class CloneManager : MonoBehaviour
 
     public bool IsTimeStopped() => isTimeStopped;
 
-    private void OnDestroy()
+    // private void OnDestroy()
+    // {
+    //     if (currentClone != null) Destroy(currentClone);
+    //     if (currentSolidClone != null) Destroy(currentSolidClone);
+    // }
+
+    private void OnDestroy() //b
     {
+        if (qAction != null) qAction.performed -= OnQPerformed;
+        if (tabAction != null) tabAction.performed -= OnTabPerformed;
+        if (eAction != null) eAction.performed -= OnEPerformed;
+        
+        inputActions?.Disable();
+
+        qAction?.Dispose();
+        tabAction?.Dispose();
+        eAction?.Dispose();
+        inputActions?.Dispose();
+
         if (currentClone != null) Destroy(currentClone);
         if (currentSolidClone != null) Destroy(currentSolidClone);
     }

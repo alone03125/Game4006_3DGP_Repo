@@ -26,9 +26,18 @@ public class DeadZone : MonoBehaviour
         StartCoroutine(ReloadCurrentLevel());
     }
 
-    private IEnumerator ReloadCurrentLevel()
+  private IEnumerator ReloadCurrentLevel()
     {
         isReloading = true;
+
+        var cloneMgr = FindAnyObjectByType<CloneManager>();
+        if (cloneMgr != null)
+            cloneMgr.ForceExitTimeStop(false, handleTraceClone: false);
+
+        var traceMgr = FindAnyObjectByType<TraceCloneManager>();
+        if (traceMgr != null && traceMgr.IsPhantomActive())
+            traceMgr.ForceExitClean();
+
         yield return LevelReset.ReloadCurrentLevel(reloadDelay);
     }
 }
