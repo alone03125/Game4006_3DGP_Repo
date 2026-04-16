@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class CloneManager : MonoBehaviour
 {
@@ -25,7 +26,8 @@ public class CloneManager : MonoBehaviour
     public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
 
     [Header("Disappear Warning")]
-    public Renderer warningRenderer;              // 显示预警效果的 Renderer
+    public Renderer warningRenderer;              // 可选：3D Renderer 预警（不推荐）
+    public Image warningUIImage;                  // 推荐：UI Image 全屏预警
     public string warningMaterialProperty = "_Alpha";
     public AnimationCurve warningIntensityCurve = AnimationCurve.Linear(0, 0, 1, 1);
     [Range(0, 1)] public float warningEdgeThreshold = 0.2f;
@@ -101,7 +103,7 @@ public class CloneManager : MonoBehaviour
             Camera.main.transform.rotation = lockedCameraRotation;
         }
 
-        // 视界分身的视野/遮挡检测（生成保护期内跳过，已移除距离限制）
+        // 视界分身的视野/遮挡检测（生成保护期内跳过）
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
             if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
@@ -119,19 +121,30 @@ public class CloneManager : MonoBehaviour
 
     private void UpdateWarningEffect()
     {
-        if (warningMaterialInstance == null) return;
+        float targetAlpha = 0f;
 
-        float warningFactor = 0f;
-        if (isCloneActive && currentClone != null)
+        // 仅当视界分身激活且不在生成保护期内才计算预警
+        if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
             float occlusionRatio = GetOcclusionRatio(currentClone);
             float edgeDistanceRatio = GetEdgeDistanceRatio(currentClone);
-            warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
+            float warningFactor = Mathf.Max(occlusionRatio, edgeDistanceRatio);
+            targetAlpha = warningIntensityCurve.Evaluate(warningFactor);
         }
 
-        float targetAlpha = warningIntensityCurve.Evaluate(warningFactor);
         currentWarningAlpha = Mathf.Lerp(currentWarningAlpha, targetAlpha, Time.deltaTime * 5f);
-        warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
+
+        // 应用到材质或 UI Image
+        if (warningMaterialInstance != null)
+        {
+            warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
+        }
+        if (warningUIImage != null)
+        {
+            Color c = warningUIImage.color;
+            c.a = currentWarningAlpha;
+            warningUIImage.color = c;
+        }
     }
 
     private float GetOcclusionRatio(GameObject target)
