@@ -26,6 +26,7 @@ public class CloneManager : MonoBehaviour
     public LayerMask transparentLayers;           // 透明层（分身可穿越且不阻挡视线）
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     [Header("Disappear Warning")]
     public Renderer warningRenderer;              // 可选：3D Renderer 预警（不推荐）
     public Image warningUIImage;                  // 推荐：UI Image 全屏预警
@@ -35,6 +36,9 @@ public class CloneManager : MonoBehaviour
 
     private const float SWAP_VFX_DURATION = 2.5f;
     private const float DISAPPEAR_VFX_DURATION = 2.0f;
+=======
+    private const float SWAP_VFX_DURATION = 2.5f; // 传送特效持续时间
+>>>>>>> parent of 393d76b (shader test v1.0)
 =======
     private const float SWAP_VFX_DURATION = 2.5f; // 传送特效持续时间
 >>>>>>> parent of 393d76b (shader test v1.0)
@@ -128,6 +132,7 @@ public class CloneManager : MonoBehaviour
 
     private void OnQPerformed(InputAction.CallbackContext ctx)
     {
+<<<<<<< HEAD
 <<<<<<< HEAD
         float targetAlpha = 0f;
 
@@ -306,6 +311,8 @@ public class CloneManager : MonoBehaviour
         if (!value.isPressed) return;
         Debug.Log($"[CloneManager] VisionActivate (Q) pressed, isTimeStopped={isTimeStopped}");
 
+=======
+>>>>>>> parent of 393d76b (shader test v1.0)
 =======
 >>>>>>> parent of 393d76b (shader test v1.0)
         if (!isTimeStopped)
