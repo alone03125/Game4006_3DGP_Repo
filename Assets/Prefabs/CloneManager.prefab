@@ -50,6 +50,8 @@ MonoBehaviour:
     type: 3}
   visionCloneMaterial: {fileID: 2100000, guid: 02816cefa349a2544986be9ec62e9b3b, type: 2}
   solidCloneMaterial: {fileID: 2100000, guid: e051a88f4dd34214391eacf259b34f07, type: 2}
+  inputActions: {fileID: -944628639613478452, guid: 13459168a74738648a44b9317df1cba4,
+    type: 3}
   triangleUIPrefab: {fileID: 0}
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   swapVFXPrefab: {fileID: 3167520248557979349, guid: d5deb5398dd248642ab171154f145f5c,

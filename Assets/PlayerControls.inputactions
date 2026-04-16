@@ -33,6 +33,24 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "VisionActivate",
+                    "type": "Button",
+                    "id": "e20ed070-ede3-4660-a0e2-95312ed91f15",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "VisionTransfer",
+                    "type": "Button",
+                    "id": "054feb37-b4d8-456a-9e14-26c684dadb19",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "TraceActivate",
                     "type": "Button",
                     "id": "f1a2b3c4-d5e6-47f8-90ab-cdef12345678",
@@ -128,6 +146,28 @@
                     "processors": "",
                     "groups": "",
                     "action": "TraceActivate",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "1c2f47d2-3ef2-4371-88f4-77ed9df3d5fc",
+                    "path": "<Keyboard>/q",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "VisionActivate",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "0a6ec17f-c675-441a-ad7f-080dd56b969b",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "VisionTransfer",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
