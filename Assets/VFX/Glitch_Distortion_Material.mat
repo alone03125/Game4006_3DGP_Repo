@@ -118,7 +118,7 @@ Material:
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _Distance: 1
-    - _Distortion_Intensity: 4.2
+    - _Distortion_Intensity: 0.69
     - _Distortion_Offset_Distance: 0.107
     - _Distortion_Speed: 2
     - _DstBlend: 10
@@ -148,11 +148,8 @@ Material:
     - _ZWrite: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _Blue_Offset: {r: -4, g: 0, b: 0, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _Distortion_Squeeze: {r: 0.89, g: 0.89, b: 0, a: 0}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _Red_Offset: {r: 4, g: 0, b: 0, a: 0}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _colorshade: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
