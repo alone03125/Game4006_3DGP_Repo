@@ -470,6 +470,10 @@ public class CloneManager : MonoBehaviour
                     playerCharController.enabled = true;
                     playerCharController.Move(Vector3.zero);
 
+                     Debug.Log($"[SwapDebug][ExitTimeStop] teleported player -> {player.transform.position}, clone -> {currentClone.transform.position}"); //B
+                    Physics.SyncTransforms();//B
+                    Debug.Log("[SwapDebug][ExitTimeStop] Physics.SyncTransforms done"); //B
+
                     float newYaw = currentClone.transform.eulerAngles.y;
                     float currentPitch = cameraOrbit.GetPitch();
                     cameraOrbit.SetYawPitch(newYaw, currentPitch);
@@ -540,6 +544,10 @@ public class CloneManager : MonoBehaviour
 
         playerCharController.enabled = true;
         playerCharController.Move(Vector3.zero);
+
+        Debug.Log($"[SwapDebug][SwapWithSolidClone] player -> {player.transform.position}, solidClone -> {currentSolidClone.transform.position}");//b
+        Physics.SyncTransforms();//b
+        Debug.Log("[SwapDebug][SwapWithSolidClone] Physics.SyncTransforms done");//b
 
         float newYaw = cloneRot.eulerAngles.y;
         float currentPitch = cameraOrbit.GetPitch();
