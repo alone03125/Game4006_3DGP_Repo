@@ -1,11 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
-/// <summary>
-/// 逐Tick确定性回放：每个FixedUpdate读取一条TickRecord，
-/// 将输入喂给PlayerController，实现与录制完全一致的操作复刻。
-/// 无需空间修正、跳跃前瞻等复杂逻辑。
-/// </summary>
 public class TraceCloneReplay : MonoBehaviour
 {
     private List<TraceCloneManager.TickRecord> records;
@@ -14,13 +9,16 @@ public class TraceCloneReplay : MonoBehaviour
     private bool finished;
     private bool initialized;
     private int postFinishTicks;
-    private PlayerInteraction interaction; //B
+    private PlayerInteraction interaction;
 
-    // public void Initialize(List<TraceCloneManager.TickRecord> records, PlayerController controller)
+    private bool wasGrounded = true;
+    private float footstepTimer = 0f;
+    private const float FOOTSTEP_INTERVAL = 0.4f;
+
     public void Initialize(
-    List<TraceCloneManager.TickRecord> records,
-    PlayerController controller,
-    PlayerInteraction interaction) //B
+        List<TraceCloneManager.TickRecord> records,
+        PlayerController controller,
+        PlayerInteraction interaction)
     {
         this.records = records;
         this.controller = controller;
@@ -28,7 +26,7 @@ public class TraceCloneReplay : MonoBehaviour
         finished = false;
         initialized = false;
         postFinishTicks = 0;
-        this.interaction = interaction; //B
+        this.interaction = interaction;
     }
 
     void Start()
@@ -53,13 +51,13 @@ public class TraceCloneReplay : MonoBehaviour
             controller.SetExternalInput(rec.moveInput, false, rec.sprint);
             controller.overrideCameraYaw = rec.cameraYaw;
 
-            if (interaction != null) //B
+            if (interaction != null)
             {
-                if (rec.activatePressed) //B
-                    interaction.RequestInteract(); //B
+                if (rec.activatePressed)
+                    interaction.RequestInteract();
 
-                if (rec.activateReleased) //B
-                    interaction.RequestReleaseInteract(); //B
+                if (rec.activateReleased)
+                    interaction.RequestReleaseInteract();
             }
 
             if (rec.jumpTrigger)
@@ -69,11 +67,10 @@ public class TraceCloneReplay : MonoBehaviour
         }
         else
         {
-            // 所有Tick已消费，等待落地后销毁
             controller.SetExternalInput(Vector2.zero, false, false);
 
-            if (interaction != null) //B
-                interaction.RequestReleaseInteract(); //B
+            if (interaction != null)
+                interaction.RequestReleaseInteract();
 
             if (!controller.IsAirborne)
             {
@@ -82,7 +79,6 @@ public class TraceCloneReplay : MonoBehaviour
                 {
                     finished = true;
                     controller.canMove = false;
-                    Debug.Log($"[TraceReplay] Replay finished after {tickIndex} ticks");
                     Destroy(gameObject, 0.5f);
                 }
             }
@@ -91,5 +87,35 @@ public class TraceCloneReplay : MonoBehaviour
                 postFinishTicks = 0;
             }
         }
+
+        HandleTraceCloneAudio();
+    }
+
+    private void HandleTraceCloneAudio()
+    {
+        if (AudioManager.Instance == null) return;
+
+        bool isGrounded = controller.Controller.isGrounded;
+        float speed = controller.GetCurrentHorizontalSpeed();
+
+        if (!wasGrounded && isGrounded)
+        {
+            AudioManager.Instance.PlayTraceCloneLanding(
+                transform.position,
+                controller.GetCurrentVerticalSpeed()
+            );
+        }
+
+        if (isGrounded && speed > 0.1f)
+        {
+            footstepTimer -= Time.fixedDeltaTime;
+            if (footstepTimer <= 0f)
+            {
+                AudioManager.Instance.PlayTraceCloneFootstep(transform.position);
+                footstepTimer = FOOTSTEP_INTERVAL;
+            }
+        }
+
+        wasGrounded = isGrounded;
     }
 }
