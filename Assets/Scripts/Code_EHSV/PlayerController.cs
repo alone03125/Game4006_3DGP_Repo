@@ -278,6 +278,8 @@ public class PlayerController : MonoBehaviour
             OnPositionChanged(_lastFramePosition, newPos);
         }
         _lastFramePosition = newPos;
+
+        Debug.Log($"Grounded: {_controller.isGrounded} | IsAirborne: {IsAirborne} | Y Vel: {_jumpVelocity.y}");
     }
 
     private Vector3 CalculateDesiredHorizontalVelocity()

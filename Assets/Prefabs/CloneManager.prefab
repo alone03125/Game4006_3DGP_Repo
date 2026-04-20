@@ -46,17 +46,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2a267af436acc54c925cc7dc185f48b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 638034083987765836, guid: c5cd5493305950a4b8530acceeaa990a,
+  playerPrefab: {fileID: 3063528164594288156, guid: d4fb553674672444ca2c551bd17190e5,
     type: 3}
   visionCloneMaterial: {fileID: 2100000, guid: 02816cefa349a2544986be9ec62e9b3b, type: 2}
   solidCloneMaterial: {fileID: 2100000, guid: e051a88f4dd34214391eacf259b34f07, type: 2}
-  inputActions: {fileID: -944628639613478452, guid: 13459168a74738648a44b9317df1cba4,
-    type: 3}
   triangleUIPrefab: {fileID: 0}
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   swapVFXPrefab: {fileID: 3167520248557979349, guid: d5deb5398dd248642ab171154f145f5c,
     type: 3}
   solidCloneVFXPrefab: {fileID: 0}
+  disappearVFXPrefab: {fileID: 3167520248557979349, guid: f5a18386f93c1164aa914be05f392163,
+    type: 3}
   separationDistance: 1
   proximityRadius: 2.5
   occlusionMask:
@@ -65,6 +65,33 @@ MonoBehaviour:
   transparentLayers:
     serializedVersion: 2
     m_Bits: 256
+  warningRenderer: {fileID: 0}
+  warningMaterialProperty: _Alpha
+  warningIntensityCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  warningEdgeThreshold: 0.2
 --- !u!114 &9014755463341818459
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -77,7 +104,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 329b74e5412b7e6419b679d4e906fb4a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 638034083987765836, guid: c5cd5493305950a4b8530acceeaa990a,
+  playerPrefab: {fileID: 3063528164594288156, guid: d4fb553674672444ca2c551bd17190e5,
     type: 3}
   phantomMaterial: {fileID: 2100000, guid: 7be7f1e6ca45e6a45a515e8c9eee284e, type: 2}
   traceCloneMaterial: {fileID: 2100000, guid: 2ee868505006fb047a8fba6cd1ea7d14, type: 2}
