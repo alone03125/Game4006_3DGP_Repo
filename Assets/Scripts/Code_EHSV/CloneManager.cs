@@ -394,6 +394,14 @@ public class CloneManager : MonoBehaviour
             traceCloneManager.PauseTraceClone();
 
         Debug.Log(">>> 进入时停（视界分身）");
+
+        // ========== 暂停本体动画 ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(true);
+        }
+
         cameraLocked = true;
         lockedCameraRotation = Camera.main.transform.rotation;
         cameraOrbit.SetCameraLock(true, lockedCameraRotation, true);
@@ -447,6 +455,13 @@ public class CloneManager : MonoBehaviour
 
         Debug.Log($">>> 退出时停 (generateSolid={shouldGenerateSolid}, swapOnExit={swapOnExit})");
 
+        // ========== 恢复本体动画 ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(false);
+        }
+
         cameraLocked = false;
         cameraOrbit.SetCameraLock(false, Quaternion.identity);
 
@@ -470,9 +485,9 @@ public class CloneManager : MonoBehaviour
                     playerCharController.enabled = true;
                     playerCharController.Move(Vector3.zero);
 
-                     Debug.Log($"[SwapDebug][ExitTimeStop] teleported player -> {player.transform.position}, clone -> {currentClone.transform.position}"); //B
-                    Physics.SyncTransforms();//B
-                    Debug.Log("[SwapDebug][ExitTimeStop] Physics.SyncTransforms done"); //B
+                    Debug.Log($"[SwapDebug][ExitTimeStop] teleported player -> {player.transform.position}, clone -> {currentClone.transform.position}");
+                    Physics.SyncTransforms();
+                    Debug.Log("[SwapDebug][ExitTimeStop] Physics.SyncTransforms done");
 
                     float newYaw = currentClone.transform.eulerAngles.y;
                     float currentPitch = cameraOrbit.GetPitch();
@@ -568,6 +583,7 @@ public class CloneManager : MonoBehaviour
         Destroy(vfx, SWAP_VFX_DURATION);
     }
 
+    // 在 CreateSolidClone 方法中添加动画停止逻辑
     private void CreateSolidClone(Vector3 position, Quaternion rotation)
     {
         if (currentSolidClone != null) Destroy(currentSolidClone);
@@ -579,8 +595,37 @@ public class CloneManager : MonoBehaviour
 
         var controller = currentSolidClone.GetComponent<PlayerController>();
         if (controller != null) controller.enabled = false;
+
         var charController = currentSolidClone.GetComponent<CharacterController>();
         if (charController != null) charController.enabled = false;
+
+        // ========== 让固化实体继承视界分身的完整动画状态 ==========
+        if (currentClone != null)
+        {
+            var sourceAnimator = currentClone.GetComponentInChildren<Animator>();
+            var targetAnimator = currentSolidClone.GetComponentInChildren<Animator>();
+
+            if (sourceAnimator != null && targetAnimator != null)
+            {
+                // 强制更新源 Animator 一帧，确保状态最新
+                sourceAnimator.Update(Time.deltaTime);
+
+                // 完整复制当前动画状态
+                CopyFullAnimatorState(sourceAnimator, targetAnimator);
+            }
+        }
+
+        // 停止动画更新，定格在复制时的姿势
+        var anim = currentSolidClone.GetComponentInChildren<PlayerAnimation>();
+        if (anim != null)
+        {
+            anim.StopAnimationImmediately();
+        }
+        var animator = currentSolidClone.GetComponentInChildren<Animator>();
+        if (animator != null)
+        {
+            animator.enabled = false;
+        }
 
         var rb = currentSolidClone.GetComponent<Rigidbody>();
         if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
@@ -593,6 +638,45 @@ public class CloneManager : MonoBehaviour
         }
 
         Debug.Log($"生成固化实体于 {position}");
+    }
+
+    /// <summary>
+    /// 完整复制 Animator 状态（包括当前播放的动画和时间）
+    /// </summary>
+    private void CopyFullAnimatorState(Animator source, Animator target)
+    {
+        if (source == null || target == null) return;
+
+        // 复制所有参数
+        CopyAnimatorParameters(source, target);
+
+        // 复制当前动画状态信息
+        AnimatorStateInfo currentState = source.GetCurrentAnimatorStateInfo(0);
+        target.Play(currentState.fullPathHash, 0, currentState.normalizedTime);
+
+        // 如果有下一个状态，也复制过渡信息
+        if (source.IsInTransition(0))
+        {
+            AnimatorStateInfo nextState = source.GetNextAnimatorStateInfo(0);
+            AnimatorTransitionInfo transition = source.GetAnimatorTransitionInfo(0);
+            target.CrossFade(nextState.fullPathHash, transition.duration, 0, transition.normalizedTime);
+        }
+
+        // 强制更新一帧使状态生效
+        target.Update(0f);
+    }
+
+    private void CopyAnimatorParameters(Animator source, Animator target)
+    {
+        if (source == null || target == null) return;
+
+        // 复制所有常用参数
+        target.SetBool("IsGrounded", source.GetBool("IsGrounded"));
+        target.SetFloat("VerticalSpeed", source.GetFloat("VerticalSpeed"));
+        target.SetFloat("MoveSpeed", source.GetFloat("MoveSpeed"));
+        target.SetFloat("InputMagnitude", source.GetFloat("InputMagnitude"));
+        target.SetFloat("Horizontal", source.GetFloat("Horizontal"));
+        target.SetFloat("Vertical", source.GetFloat("Vertical"));
     }
 
     private void IgnoreCollisionWithTransparentLayers(GameObject obj, bool ignore)

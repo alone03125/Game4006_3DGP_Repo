@@ -104,20 +104,26 @@ public class TraceCloneManager : MonoBehaviour
             SwitchToVisionClone();
     }
 
-    public void ActivateTracePhantom()
+    private void ActivateTracePhantom()
     {
         if (isPhantomActive) return;
 
-        // 每次进入都覆盖先前序列
         hasSavedSequence = false;
         savedTicks.Clear();
 
         if (cloneManager != null && cloneManager.IsTimeStopped())
-            cloneManager.ForceExitTimeStop(false, false); // Don't handle trace clone, we handle it
+            cloneManager.ForceExitTimeStop(false, false);
 
-        PauseTraceClone(); // Pause existing trace clone during time-stop
+        PauseTraceClone();
 
         Debug.Log(">>> [TraceClone] Enter trace phantom state (time stop)");
+
+        // ========== 暂停本体动画（循迹录制期间也算时停） ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(true);
+        }
 
         originalCameraTarget = cameraOrbit.target;
         originalHeadOffset = cameraOrbit.headOffset;
@@ -140,15 +146,28 @@ public class TraceCloneManager : MonoBehaviour
         phantomController.canMove = true;
         phantomController.freezeGravity = false;
         phantomController.useExternalInput = false;
-        phantomController.useFixedUpdateMode = true;  // FixedUpdate驱动，与回放一致
+        phantomController.useFixedUpdateMode = true;
         phantomController.enabled = true;
 
-
-        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>(); //B
-        if (phantomInteraction == null) Debug.LogError("[TraceClone] PlayerInteraction not found");//B
+        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>();
+        if (phantomInteraction == null) Debug.LogError("[TraceClone] PlayerInteraction not found");
 
         var phantomCam = currentPhantom.GetComponentInChildren<Camera>();
         if (phantomCam != null) phantomCam.enabled = false;
+
+        // ========== 确保幻影分身的动画正常启用 ==========
+        var phantomAnim = currentPhantom.GetComponentInChildren<PlayerAnimation>();
+        if (phantomAnim != null)
+        {
+            phantomAnim.enabled = true;
+            phantomAnim.SetPauseAnimation(false);
+        }
+        var phantomAnimator = currentPhantom.GetComponentInChildren<Animator>();
+        if (phantomAnimator != null)
+        {
+            phantomAnimator.enabled = true;
+            phantomAnimator.speed = 1f;
+        }
 
         IgnoreCollisionBetween(player, currentPhantom, true);
 
@@ -157,7 +176,6 @@ public class TraceCloneManager : MonoBehaviour
 
         cameraOrbit.target = currentPhantom.transform;
 
-        // 初始化录制
         recordedTicks.Clear();
         isRecording = true;
 
@@ -169,15 +187,14 @@ public class TraceCloneManager : MonoBehaviour
 
         Debug.Log("[TraceClone] Tick-based recording started");
 
-
-        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>(); //B
-        phantomActor = currentPhantom.GetComponent<InteractionActor>(); //B
+        phantomInteraction = currentPhantom.GetComponent<PlayerInteraction>();
+        phantomActor = currentPhantom.GetComponent<InteractionActor>();
 
         if (phantomInteraction != null)
-            phantomInteraction.SetExecuteInteractImmediately(false); //B 錄製時只記錄，不觸發 
+            phantomInteraction.SetExecuteInteractImmediately(false);
 
         if (phantomActor != null)
-            phantomActor.SetCanAffectWorldMechanisms(false); // B 錄製時不觸發 Trigger 類機關
+            phantomActor.SetCanAffectWorldMechanisms(false);
     }
 
     private void ExitTracePhantomAndSpawnClone()
@@ -187,6 +204,13 @@ public class TraceCloneManager : MonoBehaviour
         Debug.Log($"[TraceClone] Recording finalized: {recordedTicks.Count} ticks");
 
         Time.timeScale = 1f;
+
+        // ========== 恢复本体动画 ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(false);
+        }
 
         cameraOrbit.target = originalCameraTarget;
         cameraOrbit.SetFreeLookMode(false);
@@ -201,7 +225,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
-        phantomInteraction = null; //B
+        phantomInteraction = null;
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -223,6 +247,13 @@ public class TraceCloneManager : MonoBehaviour
 
         Debug.Log($"[TraceClone] Saved {savedTicks.Count} ticks for later replay");
 
+        // ========== 恢复本体动画（切换到视界分身时会由 CloneManager 再次暂停） ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(false);
+        }
+
         cameraOrbit.target = originalCameraTarget;
         cameraOrbit.SetFreeLookMode(false);
         cameraOrbit.headOffset = originalHeadOffset;
@@ -234,7 +265,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
-        phantomInteraction = null; //B
+        phantomInteraction = null;
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -278,23 +309,33 @@ public class TraceCloneManager : MonoBehaviour
         traceController.freezeGravity = false;
         traceController.useFixedUpdateMode = true;
 
-        // var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
-        // replay.Initialize(ticks, traceController);
+        var traceInteraction = currentTraceClone.GetComponent<PlayerInteraction>();
+        if (traceInteraction == null)
+            Debug.LogError("[TraceClone] PlayerInteraction not found");
 
-        var traceInteraction = currentTraceClone.GetComponent<PlayerInteraction>(); //B
-        if (traceInteraction == null) //B
-        Debug.LogError("[TraceClone] PlayerInteraction not found"); //B
-
-        var replay = currentTraceClone.AddComponent<TraceCloneReplay>(); //B
-        replay.Initialize(ticks, traceController, traceInteraction); //B
+        var replay = currentTraceClone.AddComponent<TraceCloneReplay>();
+        replay.Initialize(ticks, traceController, traceInteraction);
 
         if (traceInteraction != null)
-        traceInteraction.SetExecuteInteractImmediately(true);//B
+            traceInteraction.SetExecuteInteractImmediately(true);
 
-        var traceActor = currentTraceClone.GetComponent<InteractionActor>();//B
-        if (traceActor != null) //B
-            traceActor.SetCanAffectWorldMechanisms(true); //B
+        var traceActor = currentTraceClone.GetComponent<InteractionActor>();
+        if (traceActor != null)
+            traceActor.SetCanAffectWorldMechanisms(true);
 
+        // ========== 确保循迹分身的动画正常启用 ==========
+        var traceAnim = currentTraceClone.GetComponentInChildren<PlayerAnimation>();
+        if (traceAnim != null)
+        {
+            traceAnim.enabled = true;
+            traceAnim.SetPauseAnimation(false);
+        }
+        var traceAnimator = currentTraceClone.GetComponentInChildren<Animator>();
+        if (traceAnimator != null)
+        {
+            traceAnimator.enabled = true;
+            traceAnimator.speed = 1f;
+        }
 
         Debug.Log($"[TraceClone] Trace clone spawned, {ticks.Count} ticks to replay");
     }
@@ -399,6 +440,13 @@ public class TraceCloneManager : MonoBehaviour
 
         Debug.Log("[TraceClone] Clean exit (ESC) - discarding recorded ticks");
 
+        // ========== 恢复本体动画 ==========
+        var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
+        if (playerAnim != null)
+        {
+            playerAnim.SetPauseAnimation(false);
+        }
+
         cameraOrbit.target = originalCameraTarget;
         cameraOrbit.SetFreeLookMode(false);
         cameraOrbit.headOffset = originalHeadOffset;
@@ -410,7 +458,7 @@ public class TraceCloneManager : MonoBehaviour
         Destroy(currentPhantom);
         currentPhantom = null;
         phantomController = null;
-        phantomInteraction = null;//B
+        phantomInteraction = null;
 
         isPhantomActive = false;
         isTimeStopped = false;
@@ -421,7 +469,7 @@ public class TraceCloneManager : MonoBehaviour
 
         DisablePlayerInput(player, false);
 
-        ResumeTraceClone(); // Resume old trace clone since ESC discards everything
+        ResumeTraceClone();
     }
 
     private void ReplaceMaterials(GameObject obj, Material mat)
