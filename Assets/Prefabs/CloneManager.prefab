@@ -54,6 +54,8 @@ MonoBehaviour:
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   swapVFXPrefab: {fileID: 3167520248557979349, guid: d5deb5398dd248642ab171154f145f5c,
     type: 3}
+  solidifyVFXPrefab: {fileID: 7954083761397390832, guid: 46b07ddc4493f524ab49ae101492785a,
+    type: 3}
   solidCloneVFXPrefab: {fileID: 0}
   disappearVFXPrefab: {fileID: 3167520248557979349, guid: f5a18386f93c1164aa914be05f392163,
     type: 3}

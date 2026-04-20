@@ -17,13 +17,14 @@ public class CloneManager : MonoBehaviour
     public Color unselectedColor = Color.yellow;
 
     [Header("VFX")]
-    public GameObject swapVFXPrefab;
-    public GameObject solidCloneVFXPrefab;
-    public GameObject disappearVFXPrefab;         // 消失特效（红色）
+    public GameObject swapVFXPrefab;          // 传送特效（Tab传送时使用）
+    public GameObject solidifyVFXPrefab;       // 固化特效（普通Q固化时使用）
+    public GameObject solidCloneVFXPrefab;     // 固化实体常驻特效
+    public GameObject disappearVFXPrefab;      // 消失特效（异常消失时使用）
 
     [Header("Detection")]
     public float separationDistance = 0.1f;
-    public float proximityRadius = 2.5f;          // 保护半径：在此距离内不进行消失检测
+    public float proximityRadius = 2.5f;
     public LayerMask occlusionMask = -1;
     public LayerMask transparentLayers;
 
@@ -34,6 +35,7 @@ public class CloneManager : MonoBehaviour
     [Range(0, 1)] public float warningEdgeThreshold = 0.2f;
 
     private const float SWAP_VFX_DURATION = 2.5f;
+    private const float SOLIDIFY_VFX_DURATION = 2.0f;
     private const float DISAPPEAR_VFX_DURATION = 2.0f;
 
     private bool isTimeStopped = false;
@@ -85,7 +87,6 @@ public class CloneManager : MonoBehaviour
         {
             if (currentSolidClone != null)
             {
-                // 固化实体也应用保护半径逻辑（距离本体近时不消失）
                 float dist = Vector3.Distance(player.transform.position, currentSolidClone.transform.position);
                 if (dist > proximityRadius)
                 {
@@ -110,7 +111,7 @@ public class CloneManager : MonoBehaviour
         if (isCloneActive && currentClone != null && spawnProtectionTimer <= 0f)
         {
             float distToPlayer = Vector3.Distance(player.transform.position, currentClone.transform.position);
-            // 只有超出保护半径才进行消失检测
+
             if (distToPlayer > proximityRadius)
             {
                 if (!IsCloneInSight(currentClone) || IsCloneOccluded(currentClone))
@@ -171,7 +172,6 @@ public class CloneManager : MonoBehaviour
         float warningFactor = 0f;
         if (isCloneActive && currentClone != null)
         {
-            // 保护半径内不显示预警（可选）
             float dist = Vector3.Distance(player.transform.position, currentClone.transform.position);
             if (dist > proximityRadius)
             {
@@ -186,7 +186,6 @@ public class CloneManager : MonoBehaviour
         warningMaterialInstance.SetFloat(warningMaterialProperty, currentWarningAlpha);
     }
 
-    // ... 其余方法（GetOcclusionRatio, GetEdgeDistanceRatio, GenerateSamplePoints 等）保持不变 ...
     private float GetOcclusionRatio(GameObject target)
     {
         Camera cam = Camera.main;
@@ -330,9 +329,35 @@ public class CloneManager : MonoBehaviour
         vfx.transform.localPosition = new Vector3(0, 0, 1.5f);
         vfx.transform.localRotation = Quaternion.identity;
         Destroy(vfx, DISAPPEAR_VFX_DURATION);
+        Debug.Log("[VFX] 消失特效已播放");
     }
 
-    // ---------- 输入回调 ----------
+    private void SpawnSolidifyVFX()
+    {
+        if (solidifyVFXPrefab == null) return;
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        GameObject vfx = Instantiate(solidifyVFXPrefab, cam.transform);
+        vfx.transform.localPosition = new Vector3(0, 0, 1.5f);
+        vfx.transform.localRotation = Quaternion.identity;
+        Destroy(vfx, SOLIDIFY_VFX_DURATION);
+        Debug.Log("[VFX] 固化特效已播放");
+    }
+
+    private void SpawnSwapVFX()
+    {
+        if (swapVFXPrefab == null) return;
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        GameObject vfx = Instantiate(swapVFXPrefab, cam.transform);
+        vfx.transform.localPosition = new Vector3(0, 0, 1.5f);
+        vfx.transform.localRotation = Quaternion.identity;
+        Destroy(vfx, SWAP_VFX_DURATION);
+        Debug.Log("[VFX] 传送特效已播放");
+    }
+
     public void OnVisionActivate(InputValue value)
     {
         if (!TryRefreshRuntimeRefs())
@@ -395,7 +420,6 @@ public class CloneManager : MonoBehaviour
 
         Debug.Log(">>> 进入时停（视界分身）");
 
-        // ========== 暂停本体动画 ==========
         var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
         if (playerAnim != null)
         {
@@ -453,9 +477,14 @@ public class CloneManager : MonoBehaviour
     {
         if (!isTimeStopped) return;
 
-        Debug.Log($">>> 退出时停 (generateSolid={shouldGenerateSolid}, swapOnExit={swapOnExit})");
+        float distance = 0f;
+        if (currentClone != null)
+        {
+            distance = Vector3.Distance(player.transform.position, currentClone.transform.position);
+        }
 
-        // ========== 恢复本体动画 ==========
+        Debug.Log($"[ExitTimeStop] shouldGenerateSolid={shouldGenerateSolid}, swapOnExit={swapOnExit}, distance={distance:F3}");
+
         var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
         if (playerAnim != null)
         {
@@ -470,58 +499,69 @@ public class CloneManager : MonoBehaviour
 
         if (shouldGenerateSolid && currentClone != null)
         {
-            bool isSeparated = hasSeparated || Vector3.Distance(player.transform.position, currentClone.transform.position) > separationDistance;
+            bool isSeparated = distance > separationDistance;
 
             if (isSeparated)
             {
                 if (swapOnExit)
                 {
-                    Vector3 originalPos = player.transform.position;
-                    Quaternion originalRot = player.transform.rotation;
+                    // ========== 传送模式：Tab键 ==========
+                    Vector3 originalPlayerPos = player.transform.position;
+                    Quaternion originalPlayerRot = player.transform.rotation;
 
+                    // 传送本体
                     playerCharController.enabled = false;
                     player.transform.position = currentClone.transform.position;
                     player.transform.rotation = currentClone.transform.rotation;
                     playerCharController.enabled = true;
                     playerCharController.Move(Vector3.zero);
 
-                    Debug.Log($"[SwapDebug][ExitTimeStop] teleported player -> {player.transform.position}, clone -> {currentClone.transform.position}");
                     Physics.SyncTransforms();
-                    Debug.Log("[SwapDebug][ExitTimeStop] Physics.SyncTransforms done");
 
                     float newYaw = currentClone.transform.eulerAngles.y;
                     float currentPitch = cameraOrbit.GetPitch();
                     cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
-                    CreateSolidClone(originalPos, originalRot);
+                    // 将分身移动到原本体位置并固化
+                    currentClone.transform.position = originalPlayerPos;
+                    currentClone.transform.rotation = originalPlayerRot;
+
+                    ConvertCloneToSolid();
+
+                    // ========== 播放传送特效 ==========
                     SpawnSwapVFX();
 
-                    Debug.Log($"传送本体至 {currentClone.transform.position}，原位置固化");
+                    Debug.Log($"传送本体至分身位置，分身在原位置固化");
                 }
                 else
                 {
-                    CreateSolidClone(currentClone.transform.position, currentClone.transform.rotation);
-                    Debug.Log("分身固化于最终位置");
+                    // ========== 普通固化模式：Q键 ==========
+                    ConvertCloneToSolid();
+
+                    // ========== 播放固化特效 ==========
+                    SpawnSolidifyVFX();
+
+                    Debug.Log($"分身在当前位置固化");
                 }
 
-                Destroy(currentClone);
+                currentClone = null;
             }
             else
             {
-                Debug.Log("分身未分离，不生成固化实体");
+                Debug.Log($"分身未分离（距离={distance:F3}），直接销毁");
                 Destroy(currentClone);
+                currentClone = null;
             }
         }
         else if (currentClone != null)
         {
             Destroy(currentClone);
+            currentClone = null;
         }
 
         if (triangleUI != null) Destroy(triangleUI);
         SetPlayerInputEnabled(true);
-        if (currentClone != null) EnablePlayerInput(currentClone, false);
 
-        currentClone = null;
         isCloneActive = false;
         isTimeStopped = false;
         hasSeparated = false;
@@ -539,6 +579,66 @@ public class CloneManager : MonoBehaviour
                 traceCloneManager.ResumeTraceClone();
             }
         }
+    }
+
+    /// <summary>
+    /// 将当前视界分身原地转变为固化实体
+    /// </summary>
+    private void ConvertCloneToSolid()
+    {
+        if (currentClone == null) return;
+
+        Debug.Log($"[ConvertCloneToSolid] 开始转换视界分身 -> 固化实体");
+
+        // 销毁旧的固化实体
+        if (currentSolidClone != null) Destroy(currentSolidClone);
+
+        // 直接使用当前分身作为固化实体
+        currentSolidClone = currentClone;
+
+        // 修改标签和名称
+        currentSolidClone.tag = "SolidClone";
+        currentSolidClone.name = "SolidClone";
+
+        // 替换材质
+        ReplaceMaterials(currentSolidClone, solidCloneMaterial);
+
+        // 禁用 PlayerController
+        var controller = currentSolidClone.GetComponent<PlayerController>();
+        if (controller != null) controller.enabled = false;
+
+        // 禁用 CharacterController
+        var charController = currentSolidClone.GetComponent<CharacterController>();
+        if (charController != null) charController.enabled = false;
+
+        // 添加或配置 Rigidbody（运动学）
+        var rb = currentSolidClone.GetComponent<Rigidbody>();
+        if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+
+        // 停止动画并禁用 Animator
+        var anim = currentSolidClone.GetComponentInChildren<PlayerAnimation>();
+        if (anim != null)
+        {
+            anim.StopAnimationImmediately();
+        }
+        var animator = currentSolidClone.GetComponentInChildren<Animator>();
+        if (animator != null)
+        {
+            animator.enabled = false;
+        }
+
+        // 恢复与玩家的碰撞
+        IgnoreCollisionBetween(player, currentSolidClone, false);
+
+        // 生成固化实体常驻特效
+        if (solidCloneVFXPrefab != null)
+        {
+            GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
+            vfx.transform.localPosition = Vector3.zero;
+        }
+
+        Debug.Log($"[ConvertCloneToSolid] 转换完成，固化实体位于 {currentSolidClone.transform.position}");
     }
 
     private void SwapWithSolidClone()
@@ -560,123 +660,16 @@ public class CloneManager : MonoBehaviour
         playerCharController.enabled = true;
         playerCharController.Move(Vector3.zero);
 
-        Debug.Log($"[SwapDebug][SwapWithSolidClone] player -> {player.transform.position}, solidClone -> {currentSolidClone.transform.position}");//b
-        Physics.SyncTransforms();//b
-        Debug.Log("[SwapDebug][SwapWithSolidClone] Physics.SyncTransforms done");//b
+        Physics.SyncTransforms();
 
         float newYaw = cloneRot.eulerAngles.y;
         float currentPitch = cameraOrbit.GetPitch();
         cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
+        // ========== 播放传送特效 ==========
         SpawnSwapVFX();
-    }
 
-    private void SpawnSwapVFX()
-    {
-        if (swapVFXPrefab == null) return;
-        Camera cam = Camera.main;
-        if (cam == null) return;
-
-        GameObject vfx = Instantiate(swapVFXPrefab, cam.transform);
-        vfx.transform.localPosition = new Vector3(0, 0, 1.5f);
-        vfx.transform.localRotation = Quaternion.identity;
-        Destroy(vfx, SWAP_VFX_DURATION);
-    }
-
-    // 在 CreateSolidClone 方法中添加动画停止逻辑
-    private void CreateSolidClone(Vector3 position, Quaternion rotation)
-    {
-        if (currentSolidClone != null) Destroy(currentSolidClone);
-
-        currentSolidClone = Instantiate(playerPrefab, position, rotation);
-        currentSolidClone.tag = "SolidClone";
-        currentSolidClone.name = "SolidClone";
-        ReplaceMaterials(currentSolidClone, solidCloneMaterial);
-
-        var controller = currentSolidClone.GetComponent<PlayerController>();
-        if (controller != null) controller.enabled = false;
-
-        var charController = currentSolidClone.GetComponent<CharacterController>();
-        if (charController != null) charController.enabled = false;
-
-        // ========== 让固化实体继承视界分身的完整动画状态 ==========
-        if (currentClone != null)
-        {
-            var sourceAnimator = currentClone.GetComponentInChildren<Animator>();
-            var targetAnimator = currentSolidClone.GetComponentInChildren<Animator>();
-
-            if (sourceAnimator != null && targetAnimator != null)
-            {
-                // 强制更新源 Animator 一帧，确保状态最新
-                sourceAnimator.Update(Time.deltaTime);
-
-                // 完整复制当前动画状态
-                CopyFullAnimatorState(sourceAnimator, targetAnimator);
-            }
-        }
-
-        // 停止动画更新，定格在复制时的姿势
-        var anim = currentSolidClone.GetComponentInChildren<PlayerAnimation>();
-        if (anim != null)
-        {
-            anim.StopAnimationImmediately();
-        }
-        var animator = currentSolidClone.GetComponentInChildren<Animator>();
-        if (animator != null)
-        {
-            animator.enabled = false;
-        }
-
-        var rb = currentSolidClone.GetComponent<Rigidbody>();
-        if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
-        rb.isKinematic = true;
-
-        if (solidCloneVFXPrefab != null)
-        {
-            GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
-            vfx.transform.localPosition = Vector3.zero;
-        }
-
-        Debug.Log($"生成固化实体于 {position}");
-    }
-
-    /// <summary>
-    /// 完整复制 Animator 状态（包括当前播放的动画和时间）
-    /// </summary>
-    private void CopyFullAnimatorState(Animator source, Animator target)
-    {
-        if (source == null || target == null) return;
-
-        // 复制所有参数
-        CopyAnimatorParameters(source, target);
-
-        // 复制当前动画状态信息
-        AnimatorStateInfo currentState = source.GetCurrentAnimatorStateInfo(0);
-        target.Play(currentState.fullPathHash, 0, currentState.normalizedTime);
-
-        // 如果有下一个状态，也复制过渡信息
-        if (source.IsInTransition(0))
-        {
-            AnimatorStateInfo nextState = source.GetNextAnimatorStateInfo(0);
-            AnimatorTransitionInfo transition = source.GetAnimatorTransitionInfo(0);
-            target.CrossFade(nextState.fullPathHash, transition.duration, 0, transition.normalizedTime);
-        }
-
-        // 强制更新一帧使状态生效
-        target.Update(0f);
-    }
-
-    private void CopyAnimatorParameters(Animator source, Animator target)
-    {
-        if (source == null || target == null) return;
-
-        // 复制所有常用参数
-        target.SetBool("IsGrounded", source.GetBool("IsGrounded"));
-        target.SetFloat("VerticalSpeed", source.GetFloat("VerticalSpeed"));
-        target.SetFloat("MoveSpeed", source.GetFloat("MoveSpeed"));
-        target.SetFloat("InputMagnitude", source.GetFloat("InputMagnitude"));
-        target.SetFloat("Horizontal", source.GetFloat("Horizontal"));
-        target.SetFloat("Vertical", source.GetFloat("Vertical"));
+        Debug.Log($"交换完成：玩家 -> {player.transform.position}，固化实体 -> {currentSolidClone.transform.position}");
     }
 
     private void IgnoreCollisionWithTransparentLayers(GameObject obj, bool ignore)
@@ -742,7 +735,7 @@ public class CloneManager : MonoBehaviour
         {
             hasSeparated = true;
             IgnoreCollisionBetween(player, currentClone, false);
-            Debug.Log("分身已分离");
+            Debug.Log($"分身已分离 (距离={Vector3.Distance(oldPos, newPos):F3})");
         }
     }
 
