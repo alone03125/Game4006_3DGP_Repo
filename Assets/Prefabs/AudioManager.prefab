@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &498013636215211678
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2335218716526499041}
+  - component: {fileID: 1955711890039225366}
+  m_Layer: 0
+  m_Name: AudioManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2335218716526499041
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498013636215211678}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.350398, y: 0.9954154, z: -2.6522188}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1955711890039225366
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498013636215211678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef8f51dcaaae37a40b52399032480341, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  musicSource: {fileID: 0}
+  sfxSource: {fileID: 0}
+  footstepSource: {fileID: 0}
+  voiceSource: {fileID: 0}
+  ambientSource: {fileID: 0}
+  footstepSounds: []
+  defaultFootstepClip: {fileID: 8300000, guid: 34623ca17bb4c8043ba595e10c8fb2bf, type: 3}
+  landingClip: {fileID: 8300000, guid: 95211d0b98fca484faa62ed7bcf05a8b, type: 3}
+  jumpClip: {fileID: 0}
+  footstepVolume: 0.7
+  footstepPitchVariation: 0.5
+  timeStopEnterClip: {fileID: 0}
+  timeStopExitClip: {fileID: 0}
+  timeStopForceExitClip: {fileID: 0}
+  cloneSolidifyClip: {fileID: 0}
+  cloneSwapClip: {fileID: 0}
+  cloneDisappearClip: {fileID: 0}
+  cloneSoundVolume: 0.8
+  traceCloneFootstepClip: {fileID: 0}
+  traceCloneLandingClip: {fileID: 0}
+  traceReverbPreset: 13
+  traceCloneVolume: 0.6
+  interactSuccessClip: {fileID: 0}
+  interactFailClip: {fileID: 0}
+  deathClip: {fileID: 0}
+  levelCompleteClip: {fileID: 0}
+  respawnClip: {fileID: 0}
+  interactionVolume: 0.8
+  defaultPitch: 1
+  forceExitPitch: 0.6
