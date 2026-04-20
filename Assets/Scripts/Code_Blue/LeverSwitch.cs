@@ -6,34 +6,58 @@ public class LeverSwitch : MonoBehaviour, IInteractable, IHoldInteractable
     [Header("Lever Visual")]
     [SerializeField] private Transform leverVisual;
 
-   
-    [SerializeField] private Vector3 topEulerOffset = Vector3.zero;
+    [Tooltip("relative to initial position when not pressed (local)")]
+    [SerializeField] private float topZOffset = 0f;
 
+    [Tooltip("relative to initial position when pressed (local)")]
+    [SerializeField] private float downZOffset = -0.1f;
 
-    [SerializeField] private Vector3 downEulerOffset = new Vector3(30f, 0f, 0f);
+    [Tooltip("lever movement speed (units per second)")]
+    [SerializeField] private float moveSpeed = 1f;
 
-    [SerializeField] private float moveSpeed = 120f; // degrees per second
+    [Header("SFX")]
+    [Tooltip("audio source, if empty, will automatically create one on this GameObject")]
+    [SerializeField] private AudioSource audioSource;
+
+    [Tooltip("hold start sfx")]
+    [SerializeField] private AudioClip holdStartSfx;
+
+    [Tooltip("hold end sfx")]
+    [SerializeField] private AudioClip holdEndSfx;
+
+    [Range(0f, 1f)]
+    [SerializeField] private float sfxVolume = 1f;
 
     [Header("Events")]
     [SerializeField] private UnityEvent onHoldStart;
     [SerializeField] private UnityEvent onHoldEnd;
 
     private bool isHolding;
-    private Quaternion baseLocalRotation; // Inspector 起始角度
+    private Vector3 baseLocalPosition;
 
     private void Awake()
     {
         if (leverVisual == null) leverVisual = transform;
-        baseLocalRotation = leverVisual.localRotation;
+        baseLocalPosition = leverVisual.localPosition;
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+            }
+        }
     }
 
     private void Update()
     {
-        Vector3 offset = isHolding ? downEulerOffset : topEulerOffset;
-        Quaternion target = baseLocalRotation * Quaternion.Euler(offset);
+        float zOffset = isHolding ? downZOffset : topZOffset;
+        Vector3 target = baseLocalPosition + new Vector3(0f, 0f, zOffset);
 
-        leverVisual.localRotation = Quaternion.RotateTowards(
-            leverVisual.localRotation,
+        leverVisual.localPosition = Vector3.MoveTowards(
+            leverVisual.localPosition,
             target,
             moveSpeed * Time.deltaTime
         );
@@ -48,6 +72,7 @@ public class LeverSwitch : MonoBehaviour, IInteractable, IHoldInteractable
     {
         if (isHolding) return;
         isHolding = true;
+        PlaySfx(holdStartSfx);
         onHoldStart?.Invoke();
     }
 
@@ -55,6 +80,13 @@ public class LeverSwitch : MonoBehaviour, IInteractable, IHoldInteractable
     {
         if (!isHolding) return;
         isHolding = false;
+        PlaySfx(holdEndSfx);
         onHoldEnd?.Invoke();
+    }
+
+    private void PlaySfx(AudioClip clip)
+    {
+        if (clip == null || audioSource == null) return;
+        audioSource.PlayOneShot(clip, sfxVolume);
     }
 }
