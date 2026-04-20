@@ -94,6 +94,13 @@ public class CloneManager : MonoBehaviour
                     {
                         Debug.Log("固化实体离开视野或被完全遮挡，销毁");
                         SpawnDisappearVFX();
+
+                        // 播放消失音效
+                        if (AudioManager.Instance != null)
+                        {
+                            AudioManager.Instance.PlayCloneDisappear();
+                        }
+
                         Destroy(currentSolidClone);
                         currentSolidClone = null;
                     }
@@ -118,6 +125,14 @@ public class CloneManager : MonoBehaviour
                 {
                     Debug.Log($"分身距离 {distToPlayer:F2} > {proximityRadius} 且丢失视野或被完全遮挡，强制退出时停");
                     SpawnDisappearVFX();
+
+                    // 播放强制退出音效（降调）和消失音效
+                    if (AudioManager.Instance != null)
+                    {
+                        AudioManager.Instance.PlayTimeStopForceExit();
+                        AudioManager.Instance.PlayCloneDisappear();
+                    }
+
                     ExitTimeStop(false, swapOnExit: false);
                 }
             }
@@ -420,6 +435,7 @@ public class CloneManager : MonoBehaviour
 
         Debug.Log(">>> 进入时停（视界分身）");
 
+        // 暂停本体动画
         var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
         if (playerAnim != null)
         {
@@ -470,6 +486,13 @@ public class CloneManager : MonoBehaviour
         EnablePlayerInput(currentClone, true);
 
         spawnProtectionTimer = SPAWN_PROTECTION_DURATION;
+
+        // 播放进入时停音效
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayTimeStopEnter();
+        }
+
         Debug.Log("视界分身已生成");
     }
 
@@ -485,6 +508,7 @@ public class CloneManager : MonoBehaviour
 
         Debug.Log($"[ExitTimeStop] shouldGenerateSolid={shouldGenerateSolid}, swapOnExit={swapOnExit}, distance={distance:F3}");
 
+        // 恢复本体动画
         var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
         if (playerAnim != null)
         {
@@ -505,11 +529,10 @@ public class CloneManager : MonoBehaviour
             {
                 if (swapOnExit)
                 {
-                    // ========== 传送模式：Tab键 ==========
+                    // 传送模式：本体传送到分身位置，分身在原位置固化
                     Vector3 originalPlayerPos = player.transform.position;
                     Quaternion originalPlayerRot = player.transform.rotation;
 
-                    // 传送本体
                     playerCharController.enabled = false;
                     player.transform.position = currentClone.transform.position;
                     player.transform.rotation = currentClone.transform.rotation;
@@ -522,24 +545,32 @@ public class CloneManager : MonoBehaviour
                     float currentPitch = cameraOrbit.GetPitch();
                     cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
-                    // 将分身移动到原本体位置并固化
                     currentClone.transform.position = originalPlayerPos;
                     currentClone.transform.rotation = originalPlayerRot;
 
                     ConvertCloneToSolid();
-
-                    // ========== 播放传送特效 ==========
                     SpawnSwapVFX();
+
+                    // 播放传送音效
+                    if (AudioManager.Instance != null)
+                    {
+                        AudioManager.Instance.PlayCloneSwap();
+                    }
 
                     Debug.Log($"传送本体至分身位置，分身在原位置固化");
                 }
                 else
                 {
-                    // ========== 普通固化模式：Q键 ==========
+                    // 普通模式：分身在当前位置固化
                     ConvertCloneToSolid();
-
-                    // ========== 播放固化特效 ==========
                     SpawnSolidifyVFX();
+
+                    // 播放退出时停和固化音效
+                    if (AudioManager.Instance != null)
+                    {
+                        AudioManager.Instance.PlayTimeStopExit();
+                        AudioManager.Instance.PlayCloneSolidify();
+                    }
 
                     Debug.Log($"分身在当前位置固化");
                 }
@@ -581,42 +612,31 @@ public class CloneManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 将当前视界分身原地转变为固化实体
-    /// </summary>
     private void ConvertCloneToSolid()
     {
         if (currentClone == null) return;
 
         Debug.Log($"[ConvertCloneToSolid] 开始转换视界分身 -> 固化实体");
 
-        // 销毁旧的固化实体
         if (currentSolidClone != null) Destroy(currentSolidClone);
 
-        // 直接使用当前分身作为固化实体
         currentSolidClone = currentClone;
 
-        // 修改标签和名称
         currentSolidClone.tag = "SolidClone";
         currentSolidClone.name = "SolidClone";
 
-        // 替换材质
         ReplaceMaterials(currentSolidClone, solidCloneMaterial);
 
-        // 禁用 PlayerController
         var controller = currentSolidClone.GetComponent<PlayerController>();
         if (controller != null) controller.enabled = false;
 
-        // 禁用 CharacterController
         var charController = currentSolidClone.GetComponent<CharacterController>();
         if (charController != null) charController.enabled = false;
 
-        // 添加或配置 Rigidbody（运动学）
         var rb = currentSolidClone.GetComponent<Rigidbody>();
         if (rb == null) rb = currentSolidClone.AddComponent<Rigidbody>();
         rb.isKinematic = true;
 
-        // 停止动画并禁用 Animator
         var anim = currentSolidClone.GetComponentInChildren<PlayerAnimation>();
         if (anim != null)
         {
@@ -628,10 +648,8 @@ public class CloneManager : MonoBehaviour
             animator.enabled = false;
         }
 
-        // 恢复与玩家的碰撞
         IgnoreCollisionBetween(player, currentSolidClone, false);
 
-        // 生成固化实体常驻特效
         if (solidCloneVFXPrefab != null)
         {
             GameObject vfx = Instantiate(solidCloneVFXPrefab, currentSolidClone.transform);
@@ -666,8 +684,13 @@ public class CloneManager : MonoBehaviour
         float currentPitch = cameraOrbit.GetPitch();
         cameraOrbit.SetYawPitch(newYaw, currentPitch);
 
-        // ========== 播放传送特效 ==========
         SpawnSwapVFX();
+
+        // 播放传送音效
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayCloneSwap();
+        }
 
         Debug.Log($"交换完成：玩家 -> {player.transform.position}，固化实体 -> {currentSolidClone.transform.position}");
     }

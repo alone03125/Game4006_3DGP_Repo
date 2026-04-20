@@ -6,7 +6,7 @@ public class PlayerController : MonoBehaviour
 {
     private CharacterController _controller;
 
-    [Header("�ƶ�����")]
+    [Header("Movement")]
     public float moveSpeed = 5.0f;
     public float sprintMultiplier = 1.5f;
     public float forwardFactor = 1.0f;
@@ -14,43 +14,39 @@ public class PlayerController : MonoBehaviour
     public float backFactor = 0.5f;
     public float rotateSpeed = 10.0f;
 
-    [Header("�����ƶ�����")]
+    [Header("Air Control")]
     public float airAcceleration = 8f;
     public float airDrag = 3f;
     public float airTurnSpeed = 5f;
     public float maxAirSpeed = 8f;
 
-    [Header("��Ծ����")]
+    [Header("Jump")]
     public float jumpForce = 2.2f;
     public float gravity = 12f;
     public float jumpBufferTime = 0.15f;
     public float coyoteTime = 0.1f;
 
-    [Header("״̬����")]
+    [Header("State")]
     public bool canMove = true;
     public bool freezeGravity = false;
 
-    [Header("����ר������")]
+    [Header("Rotation")]
     public bool faceMovementDirection = false;
 
-    // ���뻺��
     private Vector2 _moveInput;
     private bool _jumpPressed;
     private bool _jumpHeld;
     private bool _jumpTriggerFlag;
 
-    // ���״̬
     private bool _isSprinting;
     public bool IsSprinting => useExternalInput ? externalSprint : _isSprinting;
 
-    // �ⲿ���븲��
     [HideInInspector] public bool useExternalInput = false;
     private Vector2 externalMoveInput;
     private bool externalJump;
     private bool externalSprint;
     private bool prevExternalJump;
 
-    // camera override for trace clone replay
     [HideInInspector] public bool useCameraOverride = false;
     [HideInInspector] public float overrideCameraYaw = 0f;
 
@@ -67,12 +63,10 @@ public class PlayerController : MonoBehaviour
 
     public CharacterController Controller => _controller;
 
-    // ��ȡ��ǰ��Ч���루���ⲿ��¼��
     public Vector2 GetEffectiveMoveInput() => useExternalInput ? externalMoveInput : _moveInput;
     public bool GetEffectiveJump() => useExternalInput ? externalJump : _jumpPressed;
     public bool GetEffectiveSprint() => useExternalInput ? externalSprint : _isSprinting;
 
-    // ��ȡԭʼ����
     public Vector2 GetRawMoveInput() => _moveInput;
     public bool GetRawJumpPressed() => _jumpPressed;
 
@@ -83,7 +77,6 @@ public class PlayerController : MonoBehaviour
         return v;
     }
 
-    // �����ⲿ����
     public void SetExternalInput(Vector2 move, bool jump, bool sprint)
     {
         externalMoveInput = move;
@@ -180,6 +173,12 @@ public class PlayerController : MonoBehaviour
             _jumpVelocity.y = Mathf.Sqrt(jumpForce * 2f * gravity);
             _jumpBufferTimer = 0f;
             _coyoteTimer = 0f;
+
+            // 播放跳跃音效
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayJumpSound();
+            }
         }
 
         _jumpVelocity.y -= gravity * dt;
@@ -220,7 +219,6 @@ public class PlayerController : MonoBehaviour
         Vector3 motion = horizontalMotion + _jumpVelocity;
         _controller.Move(motion * dt);
 
-        // ��ɫ����
         if (canMove && !freezeGravity)
         {
             if (faceMovementDirection)
@@ -270,6 +268,12 @@ public class PlayerController : MonoBehaviour
         if (IsAirborne && _controller.isGrounded)
         {
             IsAirborne = false;
+
+            // 播放落地音效
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayLandingSound(_jumpVelocity.y);
+            }
         }
 
         Vector3 newPos = transform.position;
@@ -278,8 +282,6 @@ public class PlayerController : MonoBehaviour
             OnPositionChanged(_lastFramePosition, newPos);
         }
         _lastFramePosition = newPos;
-
-        Debug.Log($"Grounded: {_controller.isGrounded} | IsAirborne: {IsAirborne} | Y Vel: {_jumpVelocity.y}");
     }
 
     private Vector3 CalculateDesiredHorizontalVelocity()
