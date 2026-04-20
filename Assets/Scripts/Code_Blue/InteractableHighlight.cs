@@ -1,29 +1,22 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
-// 掛在可互動物件的「根」上。控制底下 Renderer 的 Layer 切換成 Outline。
-// 支援兩種呼叫方式：
-//   1) 匿名: AddHighlight() / RemoveHighlight()  (向後相容舊程式)
-//   2) 具名: AddHighlight(requester) / RemoveHighlight(requester)
-//      → 推薦；會自動踢除已被 Destroy / SetActive(false) 的 requester，
-//         解決「Clone 消失後 outline 卡住」之類的殘影問題。
+// 掛在可互動物件的「根」上。啟用時 spawn 幽靈 renderer 到 Outline layer，不改動任何 Collider / 物理層。
+// 支援 AddHighlight() 匿名與 AddHighlight(Object) 具名 (建議具名)。
 [DisallowMultipleComponent]
 public class InteractableHighlight : MonoBehaviour
 {
     [Header("Outline Layer")]
-    [Tooltip("outline layer name")]
     [SerializeField] private string outlineLayerName = "Outline";
 
     [Header("Renderers")]
-    [Tooltip("if empty, will automatically grab Renderers on this GameObject and its children")]
+    [Tooltip("留空會自動抓本物件與子物件的 MeshRenderer / SkinnedMeshRenderer")]
     [SerializeField] private Renderer[] targetRenderers;
 
     [Header("Safety Valve")]
-    [Tooltip("每隔這段時間驗證一次登錄中的 requester，自動踢除已銷毀/停用的 (秒)")]
     [Range(0.05f, 5f)]
     [SerializeField] private float validateInterval = 0.25f;
-
-    [Tooltip("超過這個匿名計數就視為異常，下一次驗證會自動歸零。0 = 不限制")]
     [SerializeField] private int maxAnonymousCount = 16;
 
     [Header("Debug (read only)")]
@@ -32,11 +25,12 @@ public class InteractableHighlight : MonoBehaviour
     [SerializeField] private int anonymousCount;
 
     private int _outlineLayer = -1;
-    private int[] _originalLayers;
 
     private readonly HashSet<Object> _requesters = new();
     private readonly List<Object> _staleBuffer = new();
     private int _anonymousCount;
+
+    private readonly List<GameObject> _ghosts = new();
 
     private float _nextValidateTime;
     private bool _outlineApplied;
@@ -45,21 +39,27 @@ public class InteractableHighlight : MonoBehaviour
     {
         _outlineLayer = LayerMask.NameToLayer(outlineLayerName);
         if (_outlineLayer < 0)
-            Debug.LogError($"[InteractableHighlight] Layer '{outlineLayerName}' not created, please create it in Tags and Layers.", this);
+        {
+            Debug.LogError($"[InteractableHighlight] Layer '{outlineLayerName}' not created.", this);
+            return;
+        }
 
         if (targetRenderers == null || targetRenderers.Length == 0)
             targetRenderers = GetComponentsInChildren<Renderer>(true);
 
-        _originalLayers = new int[targetRenderers.Length];
-        for (int i = 0; i < targetRenderers.Length; i++)
-            if (targetRenderers[i] != null)
-                _originalLayers[i] = targetRenderers[i].gameObject.layer;
+        BuildGhosts();
     }
 
     private void OnDisable() => ForceClear();
-    private void OnDestroy() => ForceClear();
 
-    // 匿名版本 (舊程式相容)
+    private void OnDestroy()
+    {
+        for (int i = 0; i < _ghosts.Count; i++)
+            if (_ghosts[i] != null) Destroy(_ghosts[i]);
+        _ghosts.Clear();
+    }
+
+    // --- Public API ---
     public void AddHighlight()
     {
         _anonymousCount++;
@@ -72,7 +72,6 @@ public class InteractableHighlight : MonoBehaviour
         Refresh();
     }
 
-    // 具名版本 (推薦)
     public void AddHighlight(Object requester)
     {
         if (requester == null) { AddHighlight(); return; }
@@ -94,6 +93,7 @@ public class InteractableHighlight : MonoBehaviour
         Refresh();
     }
 
+    // --- Internals ---
     private void Update()
     {
         if (Time.unscaledTime < _nextValidateTime) return;
@@ -101,17 +101,14 @@ public class InteractableHighlight : MonoBehaviour
 
         Validate();
 
-        // 匿名計數異常保險絲 (防止被呼叫端呼叫次數不對稱)
         if (maxAnonymousCount > 0 && _anonymousCount > maxAnonymousCount)
         {
-            Debug.LogWarning(
-                $"[InteractableHighlight] Anonymous count exceeded {maxAnonymousCount} on '{name}', force reset.", this);
+            Debug.LogWarning($"[InteractableHighlight] Anonymous count exceeded {maxAnonymousCount} on '{name}', reset.", this);
             _anonymousCount = 0;
             Refresh();
         }
     }
 
-    // 踢除已銷毀 / 被停用的具名 requester
     private void Validate()
     {
         if (_requesters.Count == 0) return;
@@ -148,22 +145,81 @@ public class InteractableHighlight : MonoBehaviour
         anonymousCount = _anonymousCount;
 
         bool shouldBeOn = namedRequesterCount > 0 || anonymousCount > 0;
-        ApplyOutlineLayer(shouldBeOn);
+        ApplyOutline(shouldBeOn);
         outlineCurrentlyOn = _outlineApplied;
     }
 
-    private void ApplyOutlineLayer(bool on)
+    private void ApplyOutline(bool on)
     {
-        if (_outlineLayer < 0 || targetRenderers == null) return;
         if (on == _outlineApplied) return;
+
+        for (int i = 0; i < _ghosts.Count; i++)
+            if (_ghosts[i] != null) _ghosts[i].SetActive(on);
+
+        _outlineApplied = on;
+    }
+
+    // --- Ghost renderer construction ---
+    private void BuildGhosts()
+    {
+        if (targetRenderers == null) return;
 
         for (int i = 0; i < targetRenderers.Length; i++)
         {
             var r = targetRenderers[i];
             if (r == null) continue;
-            r.gameObject.layer = on ? _outlineLayer : _originalLayers[i];
-        }
 
-        _outlineApplied = on;
+            GameObject ghost = null;
+
+            if (r is MeshRenderer mr)
+            {
+                var filter = mr.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null) continue;
+
+                ghost = new GameObject($"__Outline_{mr.name}");
+                ghost.transform.SetParent(mr.transform, false);
+                ghost.layer = _outlineLayer;
+
+                var gf = ghost.AddComponent<MeshFilter>();
+                gf.sharedMesh = filter.sharedMesh;
+
+                var gr = ghost.AddComponent<MeshRenderer>();
+                CopyBasicSettings(mr, gr);
+            }
+            else if (r is SkinnedMeshRenderer smr)
+            {
+                if (smr.sharedMesh == null) continue;
+
+                Transform parent = smr.transform.parent != null ? smr.transform.parent : smr.transform;
+                ghost = new GameObject($"__Outline_{smr.name}");
+                ghost.transform.SetParent(parent, false);
+                ghost.transform.localPosition = smr.transform.localPosition;
+                ghost.transform.localRotation = smr.transform.localRotation;
+                ghost.transform.localScale = smr.transform.localScale;
+                ghost.layer = _outlineLayer;
+
+                var gsm = ghost.AddComponent<SkinnedMeshRenderer>();
+                gsm.sharedMesh = smr.sharedMesh;
+                gsm.bones = smr.bones;
+                gsm.rootBone = smr.rootBone;
+                CopyBasicSettings(smr, gsm);
+            }
+
+            if (ghost != null)
+            {
+                ghost.SetActive(false);
+                _ghosts.Add(ghost);
+            }
+        }
+    }
+
+    private static void CopyBasicSettings(Renderer src, Renderer dst)
+    {
+        dst.sharedMaterials = src.sharedMaterials; // 會被 Render Objects Override Material 覆蓋
+        dst.shadowCastingMode = ShadowCastingMode.Off;
+        dst.receiveShadows = false;
+        dst.lightProbeUsage = LightProbeUsage.Off;
+        dst.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        dst.allowOcclusionWhenDynamic = false;
     }
 }
