@@ -433,6 +433,17 @@ public class CloneManager : MonoBehaviour
         if (traceCloneManager != null)
             traceCloneManager.PauseTraceClone();
 
+        // 播放进入时停音效
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayTimeStopEnter();
+        }
+
+        // 切换至时停音乐
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.TransitionToTimeStop();
+        }
         Debug.Log(">>> 进入时停（视界分身）");
 
         // 暂停本体动画
@@ -592,6 +603,13 @@ public class CloneManager : MonoBehaviour
 
         if (triangleUI != null) Destroy(triangleUI);
         SetPlayerInputEnabled(true);
+
+        // 在方法末尾，清理完状态后恢复音乐（无论哪个分支）
+        // 注意：必须在 isTimeStopped = false 之前调用，因为我们需要根据当前状态判断
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.TransitionToNormal();
+        }
 
         isCloneActive = false;
         isTimeStopped = false;

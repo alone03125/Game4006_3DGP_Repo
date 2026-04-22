@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2335218716526499041}
   - component: {fileID: 1955711890039225366}
+  - component: {fileID: 2026606612692177453}
   m_Layer: 0
   m_Name: AudioManager
   m_TagString: Untagged
@@ -44,33 +45,49 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef8f51dcaaae37a40b52399032480341, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  musicSource: {fileID: 0}
-  sfxSource: {fileID: 0}
-  footstepSource: {fileID: 0}
-  voiceSource: {fileID: 0}
-  ambientSource: {fileID: 0}
-  footstepSounds: []
-  defaultFootstepClip: {fileID: 8300000, guid: 34623ca17bb4c8043ba595e10c8fb2bf, type: 3}
-  landingClip: {fileID: 8300000, guid: 95211d0b98fca484faa62ed7bcf05a8b, type: 3}
-  jumpClip: {fileID: 0}
+  masterVolume: 1
+  sfxVolume: 0.8
   footstepVolume: 0.7
-  footstepPitchVariation: 0.5
-  timeStopEnterClip: {fileID: 0}
-  timeStopExitClip: {fileID: 0}
-  timeStopForceExitClip: {fileID: 0}
-  cloneSolidifyClip: {fileID: 0}
-  cloneSwapClip: {fileID: 0}
-  cloneDisappearClip: {fileID: 0}
-  cloneSoundVolume: 0.8
-  traceCloneFootstepClip: {fileID: 0}
-  traceCloneLandingClip: {fileID: 0}
-  traceReverbPreset: 13
   traceCloneVolume: 0.6
-  interactSuccessClip: {fileID: 0}
-  interactFailClip: {fileID: 0}
-  deathClip: {fileID: 0}
-  levelCompleteClip: {fileID: 0}
-  respawnClip: {fileID: 0}
-  interactionVolume: 0.8
+  footstepGroups: []
+  defaultFootstepClips:
+  - {fileID: 8300000, guid: 34623ca17bb4c8043ba595e10c8fb2bf, type: 3}
+  landingClips:
+  - {fileID: 8300000, guid: 95211d0b98fca484faa62ed7bcf05a8b, type: 3}
+  jumpClips: []
+  footstepPitchVariation: 0.5
+  timeStopEnterClips: []
+  timeStopExitClips: []
+  timeStopForceExitClips: []
+  cloneSolidifyClips: []
+  cloneSwapClips: []
+  cloneDisappearClips: []
+  traceCloneFootstepClips: []
+  traceCloneLandingClips: []
+  traceReverbPreset: 13
+  interactSuccessClips: []
+  interactFailClips: []
+  deathClips: []
+  levelCompleteClips: []
+  respawnClips: []
   defaultPitch: 1
   forceExitPitch: 0.6
+--- !u!114 &2026606612692177453
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498013636215211678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2a2f3f51c1d4e1479b73a585097ab62, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  normalMusicClip: {fileID: 8300000, guid: 2d6b6ff5b7da8e343a008da037c2fff6, type: 3}
+  timeStopMusicClip: {fileID: 8300000, guid: 3025d9db47b323d448dde3b700473652, type: 3}
+  pitchDropSpeed: 2.5
+  pitchRiseSpeed: 3
+  minPitch: 0.1
+  crossfadeDuration: 1.5
+  musicVolume: 0.492

@@ -117,6 +117,11 @@ public class TraceCloneManager : MonoBehaviour
         PauseTraceClone();
 
         Debug.Log(">>> [TraceClone] Enter trace phantom state (time stop)");
+        // 切换至时停音乐
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.TransitionToTimeStop();
+        }
 
         // ========== 暂停本体动画（循迹录制期间也算时停） ==========
         var playerAnim = player.GetComponentInChildren<PlayerAnimation>();
@@ -210,6 +215,12 @@ public class TraceCloneManager : MonoBehaviour
         if (playerAnim != null)
         {
             playerAnim.SetPauseAnimation(false);
+        }
+
+        // 切换回正常音乐
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.TransitionToNormal();
         }
 
         cameraOrbit.target = originalCameraTarget;
@@ -445,6 +456,12 @@ public class TraceCloneManager : MonoBehaviour
         if (playerAnim != null)
         {
             playerAnim.SetPauseAnimation(false);
+        }
+
+        // 切换回正常音乐
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.TransitionToNormal();
         }
 
         cameraOrbit.target = originalCameraTarget;
