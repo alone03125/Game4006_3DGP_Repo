@@ -65,7 +65,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ae2158b4fa4c5564d8cececfe4e6c743, type: 2}
+  - {fileID: 2100000, guid: bbd18e9fb2d6d1542bfcc6377711afb6, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -172,8 +172,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9bb88b6db482696489215962a26d0d69, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  hoverBrightnessMultiplier: 1.3
-  clickBrightnessMultiplier: 0.8
+  rendererOverrides:
+  - targetRenderer: {fileID: 3702592529246011416}
+    enabled: 1
+    normalMaterial: {fileID: 2100000, guid: bbd18e9fb2d6d1542bfcc6377711afb6, type: 2}
+    hoverMaterial: {fileID: 2100000, guid: 6cb983fc407e8ac45afea6d74e4a6cb9, type: 2}
+    clickMaterial: {fileID: 2100000, guid: 621f79993b8dade45a4bc7177501b306, type: 2}
+  textOverrides:
+  - targetText: {fileID: 8951725804473068674}
+    enabled: 1
+    normalAlpha: 0.05
+    hoverAlpha: 1
+    clickAlpha: 0.5
   enableDelayedSceneLoad: 1
   loadDelay: 2
   sceneToLoad: 
@@ -390,8 +400,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 184549375
+  m_fontColor: {r: 1, g: 1, b: 1, a: 0.039215688}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

@@ -23,6 +23,11 @@ public static class GameSettings
     private const string KEY_SHOW_HOTKEY_DISPLAY = "Settings_ShowHotkeyDisplay";
     private const string KEY_SHOW_VERSION = "Settings_ShowVersion";
 
+    // ========== 音量设置 Keys ==========
+    private const string KEY_MASTER_VOLUME = "Settings_MasterVolume";
+    private const string KEY_SFX_VOLUME = "Settings_SFXVolume";
+    private const string KEY_MUSIC_VOLUME = "Settings_MusicVolume";
+
     // ========== Defaults ==========
     public const float DEFAULT_SENSITIVITY = 8f;
     public const bool DEFAULT_INVERT_Y = false;
@@ -36,6 +41,10 @@ public static class GameSettings
     public const bool DEFAULT_SHOW_ENTITY_DETECTION = false;
     public const bool DEFAULT_SHOW_HOTKEY_DISPLAY = false;
     public const bool DEFAULT_SHOW_VERSION = true;
+
+    public const float DEFAULT_MASTER_VOLUME = 0.8f;
+    public const float DEFAULT_SFX_VOLUME = 0.8f;
+    public const float DEFAULT_MUSIC_VOLUME = 0.8f;
 
     // ========== Current Values ==========
     public static float Sensitivity { get; set; }
@@ -52,6 +61,10 @@ public static class GameSettings
     public static bool ShowEntityDetection { get; set; }
     public static bool ShowHotkeyDisplay { get; set; }
     public static bool ShowVersion { get; set; }
+
+    public static float MasterVolume { get; set; }
+    public static float SFXVolume { get; set; }
+    public static float MusicVolume { get; set; }
 
     static GameSettings()
     {
@@ -74,6 +87,10 @@ public static class GameSettings
         ShowEntityDetection = PlayerPrefs.GetInt(KEY_SHOW_ENTITY_DETECTION, DEFAULT_SHOW_ENTITY_DETECTION ? 1 : 0) == 1;
         ShowHotkeyDisplay = PlayerPrefs.GetInt(KEY_SHOW_HOTKEY_DISPLAY, DEFAULT_SHOW_HOTKEY_DISPLAY ? 1 : 0) == 1;
         ShowVersion = PlayerPrefs.GetInt(KEY_SHOW_VERSION, DEFAULT_SHOW_VERSION ? 1 : 0) == 1;
+
+        MasterVolume = PlayerPrefs.GetFloat(KEY_MASTER_VOLUME, DEFAULT_MASTER_VOLUME);
+        SFXVolume = PlayerPrefs.GetFloat(KEY_SFX_VOLUME, DEFAULT_SFX_VOLUME);
+        MusicVolume = PlayerPrefs.GetFloat(KEY_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME);
     }
 
     public static void Save()
@@ -92,6 +109,11 @@ public static class GameSettings
         PlayerPrefs.SetInt(KEY_SHOW_ENTITY_DETECTION, ShowEntityDetection ? 1 : 0);
         PlayerPrefs.SetInt(KEY_SHOW_HOTKEY_DISPLAY, ShowHotkeyDisplay ? 1 : 0);
         PlayerPrefs.SetInt(KEY_SHOW_VERSION, ShowVersion ? 1 : 0);
+
+        PlayerPrefs.SetFloat(KEY_MASTER_VOLUME, MasterVolume);
+        PlayerPrefs.SetFloat(KEY_SFX_VOLUME, SFXVolume);
+        PlayerPrefs.SetFloat(KEY_MUSIC_VOLUME, MusicVolume);
+
         PlayerPrefs.Save();
     }
 
@@ -111,6 +133,10 @@ public static class GameSettings
         ShowEntityDetection = DEFAULT_SHOW_ENTITY_DETECTION;
         ShowHotkeyDisplay = DEFAULT_SHOW_HOTKEY_DISPLAY;
         ShowVersion = DEFAULT_SHOW_VERSION;
+
+        MasterVolume = DEFAULT_MASTER_VOLUME;
+        SFXVolume = DEFAULT_SFX_VOLUME;
+        MusicVolume = DEFAULT_MUSIC_VOLUME;
 
         // Reset all key bindings to defaults
         var player = GameObject.FindGameObjectWithTag("Player");
@@ -160,7 +186,7 @@ public static class GameSettings
         Screen.SetResolution(ResolutionWidth, ResolutionHeight, mode);
 
         // Gamepad deadzone
-        UnityEngine.InputSystem.InputSystem.settings.defaultDeadzoneMin = GamepadDeadzone;
+        InputSystem.settings.defaultDeadzoneMin = GamepadDeadzone;
 
         // FPS display
         var fpsDisplay = Object.FindFirstObjectByType<FPSDisplay>();
@@ -171,5 +197,17 @@ public static class GameSettings
         var debugOverlay = Object.FindFirstObjectByType<DebugOverlayManager>();
         if (debugOverlay != null)
             debugOverlay.RefreshVisibility();
+
+        // 应用音量设置
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetMasterVolume(MasterVolume);
+            AudioManager.Instance.SetSFXVolume(SFXVolume);
+        }
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.SetMasterVolume(MasterVolume);   // 总音量影响音乐
+            MusicManager.Instance.SetVolume(MusicVolume);          // 音乐独立音量
+        }
     }
 }

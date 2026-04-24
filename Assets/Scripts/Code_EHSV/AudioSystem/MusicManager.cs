@@ -6,6 +6,8 @@ using System.Collections;
 /// - 两首音乐：正常音乐 / 时停音乐
 /// - 切换时：当前音乐减速暂停，目标音乐加速启动
 /// - 均支持循环播放
+/// - 主音量 (Master) 与音乐独立音量 (Music) 分离，实际输出 = 音乐独立音量 × 主音量
+/// - 任何音量调节立即生效，零延迟（包括在过渡中）
 /// </summary>
 public class MusicManager : MonoBehaviour
 {
@@ -16,18 +18,21 @@ public class MusicManager : MonoBehaviour
     [SerializeField] private AudioClip timeStopMusicClip;
 
     [Header("Transition Settings")]
-    [SerializeField] private float pitchDropSpeed = 2.5f;      // 减速速率
-    [SerializeField] private float pitchRiseSpeed = 3f;        // 加速速率
-    [SerializeField] private float minPitch = 0.1f;            // 减速最低音高
-    [SerializeField] private float crossfadeDuration = 1.5f;   // 淡入淡出时间
+    [SerializeField] private float pitchDropSpeed = 2.5f;
+    [SerializeField] private float pitchRiseSpeed = 3f;
+    [SerializeField] private float minPitch = 0.1f;
+    [SerializeField] private float crossfadeDuration = 1.5f;
 
     [Header("Volume")]
-    [Range(0f, 1f)] public float musicVolume = 0.8f;
+    [Range(0f, 1f)] public float musicVolume = 0.8f;      // 音乐独立音量
+    private float masterVolume = 1f;                      // 全局主音量（外部设置）
 
     private AudioSource sourceNormal;
     private AudioSource sourceTimeStop;
     private Coroutine transitionCoroutine;
+
     private MusicState currentState = MusicState.Normal;
+    private MusicState targetState = MusicState.Normal;   // 过渡的目标状态
 
     private enum MusicState
     {
@@ -51,15 +56,13 @@ public class MusicManager : MonoBehaviour
 
     private void CreateAudioSources()
     {
-        // 正常音乐源
         sourceNormal = gameObject.AddComponent<AudioSource>();
         sourceNormal.clip = normalMusicClip;
         sourceNormal.loop = true;
         sourceNormal.playOnAwake = false;
-        sourceNormal.volume = musicVolume;
+        sourceNormal.volume = GetEffectiveVolume();
         sourceNormal.pitch = 1f;
 
-        // 时停音乐源
         sourceTimeStop = gameObject.AddComponent<AudioSource>();
         sourceTimeStop.clip = timeStopMusicClip;
         sourceTimeStop.loop = true;
@@ -67,7 +70,6 @@ public class MusicManager : MonoBehaviour
         sourceTimeStop.volume = 0f;
         sourceTimeStop.pitch = 1f;
 
-        // 默认开始正常音乐
         if (normalMusicClip != null)
         {
             sourceNormal.Play();
@@ -75,7 +77,78 @@ public class MusicManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 切换至时停音乐（正常音乐减速暂停，时停音乐加速启动）
+    /// 计算实际输出音量 = 音乐独立音量 × 主音量
+    /// </summary>
+    private float GetEffectiveVolume() => Mathf.Clamp01(musicVolume * masterVolume);
+
+    /// <summary>
+    /// 立即将音量应用到当前活跃的音频源（无视任何过渡）
+    /// </summary>
+    private void ApplyVolumeImmediate()
+    {
+        // 如果有过渡正在进行，强制终止并直接进入目标状态
+        if (transitionCoroutine != null)
+        {
+            StopCoroutine(transitionCoroutine);
+            transitionCoroutine = null;
+
+            // 直接完成到目标状态
+            switch (targetState)
+            {
+                case MusicState.Normal:
+                    sourceNormal.volume = GetEffectiveVolume();
+                    sourceNormal.pitch = 1f;
+                    sourceNormal.UnPause();
+                    sourceTimeStop.volume = 0f;
+                    sourceTimeStop.pitch = 1f;
+                    sourceTimeStop.Pause();
+                    currentState = MusicState.Normal;
+                    break;
+                case MusicState.TimeStop:
+                    sourceTimeStop.volume = GetEffectiveVolume();
+                    sourceTimeStop.pitch = 1f;
+                    sourceTimeStop.Play();
+                    sourceNormal.volume = 0f;
+                    sourceNormal.pitch = 1f;
+                    sourceNormal.Pause();
+                    currentState = MusicState.TimeStop;
+                    break;
+            }
+            return;
+        }
+
+        // 没有过渡，直接根据当前状态应用音量
+        switch (currentState)
+        {
+            case MusicState.Normal:
+                sourceNormal.volume = GetEffectiveVolume();
+                break;
+            case MusicState.TimeStop:
+                sourceTimeStop.volume = GetEffectiveVolume();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 设置音乐独立音量（0～1），立即生效
+    /// </summary>
+    public void SetVolume(float volume)
+    {
+        musicVolume = Mathf.Clamp01(volume);
+        ApplyVolumeImmediate();
+    }
+
+    /// <summary>
+    /// 设置主音量（0～1），立即生效
+    /// </summary>
+    public void SetMasterVolume(float volume)
+    {
+        masterVolume = Mathf.Clamp01(volume);
+        ApplyVolumeImmediate();
+    }
+
+    /// <summary>
+    /// 切换至时停音乐
     /// </summary>
     public void TransitionToTimeStop()
     {
@@ -85,7 +158,7 @@ public class MusicManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 切换至正常音乐（时停音乐减速暂停，正常音乐加速启动）
+    /// 切换至正常音乐
     /// </summary>
     public void TransitionToNormal()
     {
@@ -96,36 +169,34 @@ public class MusicManager : MonoBehaviour
 
     private IEnumerator TransitionToTimeStopRoutine()
     {
+        targetState = MusicState.TimeStop;
         currentState = MusicState.Transitioning;
 
-        // 确保时停音乐准备好（从头播放，静音）
+        // 准备时停音乐：从最低音高开始，静音
         sourceTimeStop.volume = 0f;
         sourceTimeStop.pitch = minPitch;
         sourceTimeStop.Play();
 
-        // 正常音乐减速并淡出
-        float normalStartPitch = sourceNormal.pitch;
-        float normalStartVolume = sourceNormal.volume;
+        float targetVolume = GetEffectiveVolume();
 
         while (sourceNormal.pitch > minPitch || sourceNormal.volume > 0f)
         {
-            // 减速
+            // 正常音乐减速并淡出
             sourceNormal.pitch = Mathf.MoveTowards(sourceNormal.pitch, minPitch, pitchDropSpeed * Time.unscaledDeltaTime);
-            // 淡出
             sourceNormal.volume = Mathf.Lerp(sourceNormal.volume, 0f, Time.unscaledDeltaTime * (1f / crossfadeDuration));
 
-            // 时停音乐加速并淡入
+            // 时停音乐加速并淡入（目标音量为当前有效音量）
             sourceTimeStop.pitch = Mathf.MoveTowards(sourceTimeStop.pitch, 1f, pitchRiseSpeed * Time.unscaledDeltaTime);
-            sourceTimeStop.volume = Mathf.Lerp(sourceTimeStop.volume, musicVolume, Time.unscaledDeltaTime * (1f / crossfadeDuration));
+            sourceTimeStop.volume = Mathf.Lerp(sourceTimeStop.volume, targetVolume, Time.unscaledDeltaTime * (1f / crossfadeDuration));
 
             yield return null;
         }
 
         sourceNormal.volume = 0f;
         sourceNormal.Pause();
-        sourceNormal.pitch = 1f; // 重置以备下次使用
+        sourceNormal.pitch = 1f;
 
-        sourceTimeStop.volume = musicVolume;
+        sourceTimeStop.volume = targetVolume;
         sourceTimeStop.pitch = 1f;
 
         currentState = MusicState.TimeStop;
@@ -134,11 +205,15 @@ public class MusicManager : MonoBehaviour
 
     private IEnumerator TransitionToNormalRoutine()
     {
+        targetState = MusicState.Normal;
         currentState = MusicState.Transitioning;
 
+        // 准备正常音乐：从最低音高开始，静音
         sourceNormal.volume = 0f;
         sourceNormal.pitch = minPitch;
         sourceNormal.UnPause();
+
+        float targetVolume = GetEffectiveVolume();
 
         while (sourceTimeStop.pitch > minPitch || sourceTimeStop.volume > 0f)
         {
@@ -146,7 +221,7 @@ public class MusicManager : MonoBehaviour
             sourceTimeStop.volume = Mathf.Lerp(sourceTimeStop.volume, 0f, Time.unscaledDeltaTime * (1f / crossfadeDuration));
 
             sourceNormal.pitch = Mathf.MoveTowards(sourceNormal.pitch, 1f, pitchRiseSpeed * Time.unscaledDeltaTime);
-            sourceNormal.volume = Mathf.Lerp(sourceNormal.volume, musicVolume, Time.unscaledDeltaTime * (1f / crossfadeDuration));
+            sourceNormal.volume = Mathf.Lerp(sourceNormal.volume, targetVolume, Time.unscaledDeltaTime * (1f / crossfadeDuration));
 
             yield return null;
         }
@@ -155,23 +230,11 @@ public class MusicManager : MonoBehaviour
         sourceTimeStop.Pause();
         sourceTimeStop.pitch = 1f;
 
-        sourceNormal.volume = musicVolume;
+        sourceNormal.volume = targetVolume;
         sourceNormal.pitch = 1f;
 
         currentState = MusicState.Normal;
         transitionCoroutine = null;
-    }
-
-    /// <summary>
-    /// 设置整体音量
-    /// </summary>
-    public void SetVolume(float volume)
-    {
-        musicVolume = Mathf.Clamp01(volume);
-        if (currentState == MusicState.Normal)
-            sourceNormal.volume = musicVolume;
-        else if (currentState == MusicState.TimeStop)
-            sourceTimeStop.volume = musicVolume;
     }
 
     /// <summary>
@@ -186,5 +249,5 @@ public class MusicManager : MonoBehaviour
     }
 
     public bool IsInTimeStopMusic() => currentState == MusicState.TimeStop ||
-        (currentState == MusicState.Transitioning && transitionCoroutine != null);
+        (currentState == MusicState.Transitioning && targetState == MusicState.TimeStop);
 }

@@ -62,14 +62,19 @@ MonoBehaviour:
   cloneSolidifyClips: []
   cloneSwapClips: []
   cloneDisappearClips: []
-  traceCloneFootstepClips: []
-  traceCloneLandingClips: []
+  traceCloneFootstepClips:
+  - {fileID: 8300000, guid: 34623ca17bb4c8043ba595e10c8fb2bf, type: 3}
+  traceCloneLandingClips:
+  - {fileID: 8300000, guid: 95211d0b98fca484faa62ed7bcf05a8b, type: 3}
   traceReverbPreset: 13
   interactSuccessClips: []
   interactFailClips: []
   deathClips: []
   levelCompleteClips: []
   respawnClips: []
+  uiClickClips:
+  - {fileID: 8300000, guid: 33a92dd9e8e71a443a17a8d938b890a8, type: 3}
+  uiSoundVolume: 0.8
   defaultPitch: 1
   forceExitPitch: 0.6
 --- !u!114 &2026606612692177453

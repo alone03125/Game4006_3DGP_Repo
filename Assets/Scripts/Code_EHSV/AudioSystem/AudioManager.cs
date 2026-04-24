@@ -32,7 +32,7 @@ public class AudioManager : MonoBehaviour
     [Range(0, 1)] public float traceCloneVolume = 0.6f;
 
     [Header("Player Movement - Random Pools")]
-    [SerializeField] private FootstepSoundGroup[] footstepGroups; // 按地面标签分组
+    [SerializeField] private FootstepSoundGroup[] footstepGroups;
     [SerializeField] private AudioClip[] defaultFootstepClips;
     [SerializeField] private AudioClip[] landingClips;
     [SerializeField] private AudioClip[] jumpClips;
@@ -57,6 +57,10 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioClip[] deathClips;
     [SerializeField] private AudioClip[] levelCompleteClips;
     [SerializeField] private AudioClip[] respawnClips;
+
+    [Header("UI Sounds")]
+    [SerializeField] private AudioClip[] uiClickClips;
+    [Range(0, 1)] public float uiSoundVolume = 0.8f;
 
     [Header("Settings")]
     [SerializeField] private float defaultPitch = 1f;
@@ -273,6 +277,20 @@ public class AudioManager : MonoBehaviour
         AudioClip clip = GetRandomClip(levelCompleteClips);
         if (clip == null) return;
         PlaySound(clip, sfxVolume, defaultPitch);
+    }
+
+    #endregion
+
+    #region UI Sound
+
+    /// <summary>
+    /// 播放 UI 交互音效（按钮点击、开关切换等）
+    /// </summary>
+    public void PlayUIClick()
+    {
+        AudioClip clip = GetRandomClip(uiClickClips);
+        if (clip == null) return;
+        PlaySound(clip, uiSoundVolume * sfxVolume, defaultPitch);
     }
 
     #endregion

@@ -1,116 +1,139 @@
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
+using TMPro;
 using System.Collections;
 using System.Collections.Generic;
 
 public class MouseInteractionDelayedLoad : MonoBehaviour
 {
-    [Header("Brightness Settings")]
-    [Range(0.5f, 2f)]
-    public float hoverBrightnessMultiplier = 1.3f;
-    [Range(0.5f, 2f)]
-    public float clickBrightnessMultiplier = 0.8f;
+    [Header("—— 渲染器材质切换 ——")]
+    public List<RendererMaterialOverride> rendererOverrides = new List<RendererMaterialOverride>();
 
-    [Header("Scene Loading (Delayed)")]
-    [Tooltip("是否启用延迟加载场景")]
+    [Header("—— TMP 文字透明度配置 ——")]
+    [Tooltip("只改变文字的透明度，不改变颜色")]
+    public List<TextAlphaOverride> textOverrides = new List<TextAlphaOverride>();
+
+    [Header("场景加载（延迟）")]
     public bool enableDelayedSceneLoad = true;
-    [Tooltip("点击后延迟多少秒加载场景")]
     public float loadDelay = 2.0f;
-    [Tooltip("要加载的场景名称（需已添加到 Build Settings）")]
     public string sceneToLoad;
 
-    [Header("Events")]
-    [Tooltip("点击时立即触发的事件（例如音效、动画等）")]
+    [Header("事件")]
     public UnityEvent onClick;
 
-    // 存储每个材质的状态
-    private class MaterialState
+    [System.Serializable]
+    public class RendererMaterialOverride
     {
-        public Material material;
-        public float originalHue;
-        public float originalSaturation;
-        public float originalBrightness;
+        public Renderer targetRenderer;
+        public bool enabled = true;
+        public Material normalMaterial;
+        public Material hoverMaterial;
+        public Material clickMaterial;
     }
 
-    private List<MaterialState> materialStates = new List<MaterialState>();
-    private bool hasAnyRenderer = false;
+    [System.Serializable]
+    public class TextAlphaOverride
+    {
+        public TMP_Text targetText;
+        public bool enabled = true;
+        [Range(0f, 1f)] public float normalAlpha = 1f;
+        [Range(0f, 1f)] public float hoverAlpha = 0.8f;
+        [Range(0f, 1f)] public float clickAlpha = 0.5f;
+    }
+
+    private class RendererRuntime
+    {
+        public Renderer renderer;
+        public Material originalMaterial;
+        public Material normalMaterial;
+        public Material hoverMaterial;
+        public Material clickMaterial;
+    }
+
+    private class TextRuntime
+    {
+        public TMP_Text text;
+        public Color originalColor;          // 完整的原始颜色（含原始Alpha）
+        public float normalAlpha;
+        public float hoverAlpha;
+        public float clickAlpha;
+    }
+
+    private List<RendererRuntime> rendererRuntimes = new List<RendererRuntime>();
+    private List<TextRuntime> textRuntimes = new List<TextRuntime>();
+    private bool hasAnyTarget = false;
     private bool isHovering = false;
     private bool isPressed = false;
     private Coroutine delayedLoadCoroutine;
 
     void Start()
     {
-        // 收集自身及所有子物体中的渲染器
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        CollectTargets();
+    }
 
-        if (renderers.Length == 0)
+    void CollectTargets()
+    {
+        rendererRuntimes.Clear();
+        textRuntimes.Clear();
+
+        // 材质切换配置
+        foreach (var ov in rendererOverrides)
         {
-            Debug.LogWarning($"物体 '{gameObject.name}' 及其子物体中未找到任何 Renderer 组件，亮度变化将无效。");
-            hasAnyRenderer = false;
-            // 注意：即使没有渲染器，其他功能（如延迟加载、事件）仍会正常工作
-            return;
-        }
-
-        // 遍历每个渲染器，获取其实例化材质并存储原始 HSV 信息
-        foreach (Renderer renderer in renderers)
-        {
-            // 获取材质实例数组（每个材质独立，避免影响其他物体）
-            Material[] materials = renderer.materials;
-            if (materials == null || materials.Length == 0)
-                continue;
-
-            foreach (Material mat in materials)
+            if (!ov.enabled || ov.targetRenderer == null) continue;
+            Renderer renderer = ov.targetRenderer;
+            Material currentMat = renderer.material; // 获取实例
+            rendererRuntimes.Add(new RendererRuntime
             {
-                if (mat == null) continue;
-
-                Color color = mat.color;
-                Color.RGBToHSV(color, out float h, out float s, out float v);
-
-                MaterialState state = new MaterialState
-                {
-                    material = mat,
-                    originalHue = h,
-                    originalSaturation = s,
-                    originalBrightness = v
-                };
-                materialStates.Add(state);
-            }
+                renderer = renderer,
+                originalMaterial = currentMat,
+                normalMaterial = ov.normalMaterial,
+                hoverMaterial = ov.hoverMaterial,
+                clickMaterial = ov.clickMaterial
+            });
         }
 
-        if (materialStates.Count == 0)
+        // 文字透明度配置
+        foreach (var ov in textOverrides)
         {
-            Debug.LogWarning($"物体 '{gameObject.name}' 及其子物体中找到了 Renderer，但没有有效的材质，亮度变化将无效。");
-            hasAnyRenderer = false;
+            if (!ov.enabled || ov.targetText == null) continue;
+            textRuntimes.Add(new TextRuntime
+            {
+                text = ov.targetText,
+                originalColor = ov.targetText.color,
+                normalAlpha = ov.normalAlpha,
+                hoverAlpha = ov.hoverAlpha,
+                clickAlpha = ov.clickAlpha
+            });
         }
+
+        hasAnyTarget = (rendererRuntimes.Count + textRuntimes.Count) > 0;
+        if (!hasAnyTarget)
+            Debug.LogWarning("未配置任何需要变化的 Renderer 或 TMP 文字。");
         else
         {
-            hasAnyRenderer = true;
+            ApplyState();
         }
     }
 
     void OnMouseEnter()
     {
         isHovering = true;
-        UpdateBrightness();
+        ApplyState();
     }
 
     void OnMouseExit()
     {
         isHovering = false;
         isPressed = false;
-        UpdateBrightness();
+        ApplyState();
     }
 
     void OnMouseDown()
     {
         isPressed = true;
-        UpdateBrightness();
-
-        // 1. 立即触发所有绑定的事件
+        ApplyState();
         onClick?.Invoke();
-
-        // 2. 如果启用了延迟加载，启动协程
         if (enableDelayedSceneLoad && !string.IsNullOrEmpty(sceneToLoad))
         {
             if (delayedLoadCoroutine != null)
@@ -122,32 +145,65 @@ public class MouseInteractionDelayedLoad : MonoBehaviour
     void OnMouseUp()
     {
         isPressed = false;
-        UpdateBrightness();
+        ApplyState();
     }
 
-    void UpdateBrightness()
+    void ApplyState()
     {
-        if (!hasAnyRenderer) return;
+        if (!hasAnyTarget) return;
 
-        // 确定目标亮度系数
-        float brightnessMultiplier;
-        if (isPressed)
-            brightnessMultiplier = clickBrightnessMultiplier;
-        else if (isHovering)
-            brightnessMultiplier = hoverBrightnessMultiplier;
-        else
-            brightnessMultiplier = 1f;
+        bool click = isPressed;
+        bool hover = isHovering && !click;
 
-        // 更新所有材质的颜色
-        foreach (MaterialState state in materialStates)
+        // 切换材质
+        foreach (var rt in rendererRuntimes)
         {
-            if (state.material == null) continue;
+            if (rt.renderer == null) continue;
+            Material targetMat = null;
+            if (click && rt.clickMaterial != null)
+                targetMat = rt.clickMaterial;
+            else if (hover && rt.hoverMaterial != null)
+                targetMat = rt.hoverMaterial;
+            else if (rt.normalMaterial != null)
+                targetMat = rt.normalMaterial;
+            if (targetMat != null)
+                rt.renderer.material = targetMat;
+        }
 
-            float targetBrightness = state.originalBrightness * brightnessMultiplier;
-            targetBrightness = Mathf.Clamp01(targetBrightness);
+        // 只改变文字的透明度（保留原始 RGB）
+        foreach (var rt in textRuntimes)
+        {
+            if (rt.text == null) continue;
+            float targetAlpha;
+            if (click)
+                targetAlpha = rt.clickAlpha;
+            else if (hover)
+                targetAlpha = rt.hoverAlpha;
+            else
+                targetAlpha = rt.normalAlpha;
 
-            Color newColor = Color.HSVToRGB(state.originalHue, state.originalSaturation, targetBrightness);
-            state.material.color = newColor;
+            Color originalRGB = rt.originalColor;
+            // 新的颜色 = 原始RGB + 新的Alpha（注意保留原始RGB，不要用当前text.color，因为可能被之前修改过）
+            // 但为了安全，始终基于 originalColor 重建
+            Color newColor = new Color(originalRGB.r, originalRGB.g, originalRGB.b, targetAlpha);
+            rt.text.color = newColor;
+        }
+    }
+
+    void RestoreOriginal()
+    {
+        if (!hasAnyTarget) return;
+
+        foreach (var rt in rendererRuntimes)
+        {
+            if (rt.renderer != null && rt.originalMaterial != null)
+                rt.renderer.material = rt.originalMaterial;
+        }
+
+        foreach (var rt in textRuntimes)
+        {
+            if (rt.text != null)
+                rt.text.color = rt.originalColor; // 完全恢复原始颜色（含原始Alpha）
         }
     }
 
@@ -157,26 +213,6 @@ public class MouseInteractionDelayedLoad : MonoBehaviour
         SceneManager.LoadScene(sceneToLoad);
     }
 
-    void OnDisable()
-    {
-        RestoreOriginalColors();
-    }
-
-    void OnDestroy()
-    {
-        RestoreOriginalColors();
-    }
-
-    private void RestoreOriginalColors()
-    {
-        if (!hasAnyRenderer) return;
-
-        foreach (MaterialState state in materialStates)
-        {
-            if (state.material == null) continue;
-
-            Color originalColor = Color.HSVToRGB(state.originalHue, state.originalSaturation, state.originalBrightness);
-            state.material.color = originalColor;
-        }
-    }
+    void OnDisable() { RestoreOriginal(); }
+    void OnDestroy() { RestoreOriginal(); }
 }

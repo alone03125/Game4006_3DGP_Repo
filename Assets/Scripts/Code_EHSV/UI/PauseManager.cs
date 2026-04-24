@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// Pause menu system with settings sub-panels.
@@ -63,6 +64,14 @@ public class PauseManager : MonoBehaviour
     private Toggle entityDetectionToggle;
     private Toggle hotkeyDisplayToggle;
     private Toggle versionDisplayToggle;
+
+    // 音量控件
+    private Slider masterVolumeSlider;
+    private TMP_Text masterVolumeValueText;
+    private Slider sfxVolumeSlider;
+    private TMP_Text sfxVolumeValueText;
+    private Slider musicVolumeSlider;
+    private TMP_Text musicVolumeValueText;
 
     // Resolution list
     private List<Resolution> availableResolutions = new List<Resolution>();
@@ -292,18 +301,26 @@ public class PauseManager : MonoBehaviour
 
         // Bind pause panel buttons
         ov.resumeButton?.onClick.AddListener(() => ResumeGame());
+        AttachUISoundToButton(ov.resumeButton);
         ov.settingsButton?.onClick.AddListener(() => ShowPanel(settingsPanel));
+        AttachUISoundToButton(ov.settingsButton);
         ov.quitToMenuButton?.onClick.AddListener(() =>
         {
             Debug.Log("[PauseManager] Exit to main menu - not yet implemented");
         });
+        AttachUISoundToButton(ov.quitToMenuButton);
 
         // Bind settings panel buttons
         ov.systemSettingsButton?.onClick.AddListener(() => ShowPanel(systemSettingsPanel));
+        AttachUISoundToButton(ov.systemSettingsButton);
         ov.controlOptionsButton?.onClick.AddListener(() => ShowPanel(controlOptionsPanel));
+        AttachUISoundToButton(ov.controlOptionsButton);
         ov.videoOptionsButton?.onClick.AddListener(() => ShowPanel(videoOptionsPanel));
+        AttachUISoundToButton(ov.videoOptionsButton);
         ov.audioOptionsButton?.onClick.AddListener(() => ShowPanel(audioOptionsPanel));
+        AttachUISoundToButton(ov.audioOptionsButton);
         ov.settingsBackButton?.onClick.AddListener(() => GoBack());
+        AttachUISoundToButton(ov.settingsBackButton);
 
         // System settings
         ov.restoreDefaultsButton?.onClick.AddListener(() =>
@@ -312,7 +329,9 @@ public class PauseManager : MonoBehaviour
             GameSettings.ApplyAll();
             RefreshAllSettingsUI();
         });
+        AttachUISoundToButton(ov.restoreDefaultsButton);
         ov.systemBackButton?.onClick.AddListener(() => GoBack());
+        AttachUISoundToButton(ov.systemBackButton);
 
         // Control options
         ov.rebindButton?.onClick.AddListener(() =>
@@ -320,6 +339,7 @@ public class PauseManager : MonoBehaviour
             RefreshRebindPanel();
             ShowPanel(rebindPanel);
         });
+        AttachUISoundToButton(ov.rebindButton);
 
         sensitivitySlider = ov.sensitivitySlider;
         sensitivityValueText = ov.sensitivityValueText;
@@ -329,6 +349,7 @@ public class PauseManager : MonoBehaviour
 
         BindControlListeners();
         ov.controlBackButton?.onClick.AddListener(() => { GameSettings.Save(); GoBack(); });
+        AttachUISoundToButton(ov.controlBackButton);
 
         // Video options
         resolutionDropdown = ov.resolutionDropdown;
@@ -342,12 +363,23 @@ public class PauseManager : MonoBehaviour
 
         BindVideoListeners();
         ov.videoBackButton?.onClick.AddListener(() => { GameSettings.Save(); GoBack(); });
+        AttachUISoundToButton(ov.videoBackButton);
 
-        // Audio back
-        ov.audioBackButton?.onClick.AddListener(() => GoBack());
+        // Audio options
+        masterVolumeSlider = ov.masterVolumeSlider;
+        masterVolumeValueText = ov.masterVolumeValueText;
+        sfxVolumeSlider = ov.sfxVolumeSlider;
+        sfxVolumeValueText = ov.sfxVolumeValueText;
+        musicVolumeSlider = ov.musicVolumeSlider;
+        musicVolumeValueText = ov.musicVolumeValueText;
+
+        BindAudioListeners();
+        ov.audioBackButton?.onClick.AddListener(() => { GameSettings.Save(); GoBack(); });
+        AttachUISoundToButton(ov.audioBackButton);
 
         // Rebind back
         ov.rebindBackButton?.onClick.AddListener(() => { GameSettings.Save(); GoBack(); });
+        AttachUISoundToButton(ov.rebindBackButton);
 
         // Hide all panels
         if (pausePanel != null) pausePanel.SetActive(false);
@@ -380,6 +412,7 @@ public class PauseManager : MonoBehaviour
                 var orbit = Camera.main?.GetComponent<SimpleCameraOrbit>();
                 if (orbit != null) orbit.lookSensitivity = v;
             });
+            AttachUISoundToSlider(sensitivitySlider);
         }
         if (deadzoneSlider != null)
         {
@@ -392,6 +425,7 @@ public class PauseManager : MonoBehaviour
                 if (deadzoneValueText != null) deadzoneValueText.text = v.ToString("F2");
                 InputSystem.settings.defaultDeadzoneMin = v;
             });
+            AttachUISoundToSlider(deadzoneSlider);
         }
         if (invertYToggle != null)
         {
@@ -402,6 +436,7 @@ public class PauseManager : MonoBehaviour
                 var orbit = Camera.main?.GetComponent<SimpleCameraOrbit>();
                 if (orbit != null) orbit.invertY = v;
             });
+            AttachUISoundToToggle(invertYToggle);
         }
     }
 
@@ -420,6 +455,7 @@ public class PauseManager : MonoBehaviour
                     ApplyResolutionAndMode();
                 }
             });
+            AttachUISoundToDropdown(resolutionDropdown);
         }
         if (windowModeDropdown != null)
         {
@@ -431,6 +467,7 @@ public class PauseManager : MonoBehaviour
                 GameSettings.FullscreenMode = idx;
                 ApplyResolutionAndMode();
             });
+            AttachUISoundToDropdown(windowModeDropdown);
         }
         if (fpsToggle != null)
         {
@@ -441,6 +478,7 @@ public class PauseManager : MonoBehaviour
                 var fpsDisplay = FindFirstObjectByType<FPSDisplay>();
                 if (fpsDisplay != null) fpsDisplay.SetVisible(v);
             });
+            AttachUISoundToToggle(fpsToggle);
         }
         if (fovSlider != null)
         {
@@ -453,6 +491,7 @@ public class PauseManager : MonoBehaviour
                 if (fovValueText != null) fovValueText.text = Mathf.RoundToInt(v).ToString();
                 if (Camera.main != null) Camera.main.fieldOfView = v;
             });
+            AttachUISoundToSlider(fovSlider);
         }
         if (shakeEnabledToggle != null)
         {
@@ -463,6 +502,7 @@ public class PauseManager : MonoBehaviour
                 var orbit = Camera.main?.GetComponent<SimpleCameraOrbit>();
                 if (orbit != null) orbit.enableShake = v;
             });
+            AttachUISoundToToggle(shakeEnabledToggle);
         }
         if (shakeIntensitySlider != null)
         {
@@ -476,7 +516,90 @@ public class PauseManager : MonoBehaviour
                 var orbit = Camera.main?.GetComponent<SimpleCameraOrbit>();
                 if (orbit != null) orbit.shakeIntensityMultiplier = v;
             });
+            AttachUISoundToSlider(shakeIntensitySlider);
         }
+    }
+
+    private void BindAudioListeners()
+    {
+        if (masterVolumeSlider != null)
+        {
+            masterVolumeSlider.minValue = 0f;
+            masterVolumeSlider.maxValue = 1f;
+            masterVolumeSlider.value = GameSettings.MasterVolume;
+            masterVolumeSlider.onValueChanged.AddListener((v) => {
+                GameSettings.MasterVolume = v;
+                if (masterVolumeValueText != null) masterVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+                if (AudioManager.Instance != null) AudioManager.Instance.SetMasterVolume(v);
+                if (MusicManager.Instance != null) MusicManager.Instance.SetMasterVolume(v); // 联动音乐
+            });
+            AttachUISoundToSlider(masterVolumeSlider);
+        }
+        if (sfxVolumeSlider != null)
+        {
+            sfxVolumeSlider.minValue = 0f;
+            sfxVolumeSlider.maxValue = 1f;
+            sfxVolumeSlider.value = GameSettings.SFXVolume;
+            sfxVolumeSlider.onValueChanged.AddListener((v) => {
+                GameSettings.SFXVolume = v;
+                if (sfxVolumeValueText != null) sfxVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+                if (AudioManager.Instance != null) AudioManager.Instance.SetSFXVolume(v);
+            });
+            AttachUISoundToSlider(sfxVolumeSlider);
+        }
+        if (musicVolumeSlider != null)
+        {
+            musicVolumeSlider.minValue = 0f;
+            musicVolumeSlider.maxValue = 1f;
+            musicVolumeSlider.value = GameSettings.MusicVolume;
+            musicVolumeSlider.onValueChanged.AddListener((v) => {
+                GameSettings.MusicVolume = v;
+                if (musicVolumeValueText != null) musicVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+                if (MusicManager.Instance != null) MusicManager.Instance.SetVolume(v);
+            });
+            AttachUISoundToSlider(musicVolumeSlider);
+        }
+    }
+
+    // ================================================================
+    //  UI SOUND ATTACHMENT
+    // ================================================================
+
+    private void AttachUISoundToButton(Button btn)
+    {
+        if (btn == null) return;
+        btn.onClick.AddListener(() => {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayUIClick();
+        });
+    }
+
+    private void AttachUISoundToToggle(Toggle toggle)
+    {
+        if (toggle == null) return;
+        toggle.onValueChanged.AddListener((_) => {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayUIClick();
+        });
+    }
+
+    private void AttachUISoundToSlider(Slider slider)
+    {
+        if (slider == null) return;
+        var trigger = slider.gameObject.GetComponent<EventTrigger>();
+        if (trigger == null) trigger = slider.gameObject.AddComponent<EventTrigger>();
+        var entry = new EventTrigger.Entry();
+        entry.eventID = EventTriggerType.PointerUp;
+        entry.callback.AddListener((_) => {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayUIClick();
+        });
+        trigger.triggers.Add(entry);
+    }
+
+    private void AttachUISoundToDropdown(TMP_Dropdown dropdown)
+    {
+        if (dropdown == null) return;
+        dropdown.onValueChanged.AddListener((_) => {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayUIClick();
+        });
     }
 
     // ================================================================
@@ -791,20 +914,54 @@ public class PauseManager : MonoBehaviour
         return panel;
     }
 
-    // ----- Audio Options (placeholder) -----
+    // ----- Audio Options (with volume sliders) -----
     private GameObject BuildAudioOptionsPanel(Transform parent)
     {
-        var panel = CreatePanel(parent, "AudioOptionsPanel", 500, 300);
+        var panel = CreatePanel(parent, "AudioOptionsPanel", 750, 400);
 
         var title = CreateTitle(panel.transform, "Audio Settings", 36);
-        SetAnchored(title, 0, 95, 450, 45);
+        SetAnchored(title, 0, 150, 700, 45);
 
-        var placeholder = CreateTitle(panel.transform, "Not yet implemented", 22);
-        placeholder.GetComponent<TMP_Text>().color = new Color(0.6f, 0.6f, 0.6f, 1f);
-        SetAnchored(placeholder, 0, 20, 400, 35);
+        float y = 80;
 
-        var btnBack = CreateButton(panel.transform, "Back", () => GoBack());
-        SetAnchored(btnBack, 0, -60, 360, 45);
+        // Master Volume
+        var masterRow = CreateSettingRow(panel.transform, "Master Volume", y, 300);
+        masterVolumeSlider = CreateSlider(masterRow.transform, 0f, 1f, GameSettings.MasterVolume, (v) => {
+            GameSettings.MasterVolume = v;
+            masterVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+            if (AudioManager.Instance != null) AudioManager.Instance.SetMasterVolume(v);
+        });
+        masterVolumeValueText = CreateValueLabel(masterRow.transform, Mathf.RoundToInt(GameSettings.MasterVolume * 100) + "%");
+        SetAnchored(masterRow, 0, y, 660, 40);
+        y -= 58;
+
+        // SFX Volume
+        var sfxRow = CreateSettingRow(panel.transform, "SFX Volume", y, 300);
+        sfxVolumeSlider = CreateSlider(sfxRow.transform, 0f, 1f, GameSettings.SFXVolume, (v) => {
+            GameSettings.SFXVolume = v;
+            sfxVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+            if (AudioManager.Instance != null) AudioManager.Instance.SetSFXVolume(v);
+        });
+        sfxVolumeValueText = CreateValueLabel(sfxRow.transform, Mathf.RoundToInt(GameSettings.SFXVolume * 100) + "%");
+        SetAnchored(sfxRow, 0, y, 660, 40);
+        y -= 58;
+
+        // Music Volume
+        var musicRow = CreateSettingRow(panel.transform, "Music Volume", y, 300);
+        musicVolumeSlider = CreateSlider(musicRow.transform, 0f, 1f, GameSettings.MusicVolume, (v) => {
+            GameSettings.MusicVolume = v;
+            musicVolumeValueText.text = Mathf.RoundToInt(v * 100) + "%";
+            if (MusicManager.Instance != null) MusicManager.Instance.SetVolume(v);
+        });
+        musicVolumeValueText = CreateValueLabel(musicRow.transform, Mathf.RoundToInt(GameSettings.MusicVolume * 100) + "%");
+        SetAnchored(musicRow, 0, y, 660, 40);
+        y -= 70;
+
+        var btnBack = CreateButton(panel.transform, "Back", () => {
+            GameSettings.Save();
+            GoBack();
+        });
+        SetAnchored(btnBack, 0, y, 400, 45);
 
         return panel;
     }
@@ -948,6 +1105,7 @@ public class PauseManager : MonoBehaviour
         btnTextRect.sizeDelta = Vector2.zero;
 
         btn.onClick.AddListener(() => onRebind?.Invoke());
+        AttachUISoundToButton(btn);
 
         return row;
     }
@@ -1066,6 +1224,26 @@ public class PauseManager : MonoBehaviour
             hotkeyDisplayToggle.isOn = GameSettings.ShowHotkeyDisplay;
         if (versionDisplayToggle != null)
             versionDisplayToggle.isOn = GameSettings.ShowVersion;
+
+        // 音量控件
+        if (masterVolumeSlider != null)
+        {
+            masterVolumeSlider.value = GameSettings.MasterVolume;
+            if (masterVolumeValueText != null)
+                masterVolumeValueText.text = Mathf.RoundToInt(GameSettings.MasterVolume * 100) + "%";
+        }
+        if (sfxVolumeSlider != null)
+        {
+            sfxVolumeSlider.value = GameSettings.SFXVolume;
+            if (sfxVolumeValueText != null)
+                sfxVolumeValueText.text = Mathf.RoundToInt(GameSettings.SFXVolume * 100) + "%";
+        }
+        if (musicVolumeSlider != null)
+        {
+            musicVolumeSlider.value = GameSettings.MusicVolume;
+            if (musicVolumeValueText != null)
+                musicVolumeValueText.text = Mathf.RoundToInt(GameSettings.MusicVolume * 100) + "%";
+        }
     }
 
     public void RefreshSettingsUI() => RefreshAllSettingsUI();
@@ -1126,6 +1304,7 @@ public class PauseManager : MonoBehaviour
         btn.colors = colors;
         btn.targetGraphic = img;
         btn.onClick.AddListener(onClick);
+        AttachUISoundToButton(btn);
 
         var textObj = new GameObject("Text");
         textObj.transform.SetParent(obj.transform, false);
@@ -1224,6 +1403,7 @@ public class PauseManager : MonoBehaviour
         slider.maxValue = max;
         slider.value = value;
         slider.onValueChanged.AddListener(onChange);
+        AttachUISoundToSlider(slider);
 
         return slider;
     }
@@ -1280,6 +1460,7 @@ public class PauseManager : MonoBehaviour
         toggle.graphic = checkImg;
         toggle.isOn = value;
         toggle.onValueChanged.AddListener(onChange);
+        AttachUISoundToToggle(toggle);
 
         return toggle;
     }
@@ -1405,6 +1586,8 @@ public class PauseManager : MonoBehaviour
         dropdown.captionText = labelTMP;
         dropdown.itemText = itemLabelTMP;
         dropdown.alphaFadeSpeed = 0.15f;
+
+        AttachUISoundToDropdown(dropdown);
 
         return dropdown;
     }

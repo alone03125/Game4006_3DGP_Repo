@@ -68,6 +68,12 @@ public class PauseMenuUIOverride : MonoBehaviour
 
     // ========== Audio Options ==========
     [Header("Audio Options")]
+    public Slider masterVolumeSlider;
+    public TMP_Text masterVolumeValueText;
+    public Slider sfxVolumeSlider;
+    public TMP_Text sfxVolumeValueText;
+    public Slider musicVolumeSlider;
+    public TMP_Text musicVolumeValueText;
     public Button audioBackButton;
 
     // ========== Rebind Panel ==========
