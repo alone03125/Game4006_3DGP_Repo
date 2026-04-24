@@ -123,7 +123,7 @@ Material:
     - _Distortion_Speed: 2
     - _DstBlend: 10
     - _DstBlendAlpha: 10
-    - _Dynamic_Alpha: 0
+    - _Dynamic_Alpha: 0.4
     - _EnvironmentReflections: 1
     - _Glitch_Distance: 0.004
     - _GlossMapScale: 0

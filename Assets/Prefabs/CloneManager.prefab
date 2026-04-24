@@ -52,15 +52,15 @@ MonoBehaviour:
   solidCloneMaterial: {fileID: 2100000, guid: e051a88f4dd34214391eacf259b34f07, type: 2}
   triangleUIPrefab: {fileID: 0}
   unselectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  swapVFXPrefab: {fileID: 3167520248557979349, guid: d5deb5398dd248642ab171154f145f5c,
+  swapVFXPrefab: {fileID: 3167520248557979349, guid: 48824b862b5ed6c43b752735ca225e16,
     type: 3}
-  solidifyVFXPrefab: {fileID: 7954083761397390832, guid: 46b07ddc4493f524ab49ae101492785a,
+  solidifyVFXPrefab: {fileID: 0}
+  solidCloneVFXPrefab: {fileID: 7954083761397390832, guid: 46b07ddc4493f524ab49ae101492785a,
     type: 3}
-  solidCloneVFXPrefab: {fileID: 0}
   disappearVFXPrefab: {fileID: 3167520248557979349, guid: f5a18386f93c1164aa914be05f392163,
     type: 3}
   separationDistance: 1
-  proximityRadius: 2.5
+  proximityRadius: 1.6
   occlusionMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -68,7 +68,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   warningRenderer: {fileID: 0}
-  warningMaterialProperty: _Alpha
+  warningMaterialProperty: _Dynamic_Alpha
   warningIntensityCurve:
     serializedVersion: 2
     m_Curve:
@@ -76,7 +76,7 @@ MonoBehaviour:
       time: 0
       value: 0
       inSlope: 0
-      outSlope: 1
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
@@ -84,7 +84,7 @@ MonoBehaviour:
     - serializedVersion: 3
       time: 1
       value: 1
-      inSlope: 1
+      inSlope: 0
       outSlope: 0
       tangentMode: 0
       weightedMode: 0
@@ -93,7 +93,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  warningEdgeThreshold: 0.2
+  warningEdgeThreshold: 0.5
 --- !u!114 &9014755463341818459
 MonoBehaviour:
   m_ObjectHideFlags: 0
